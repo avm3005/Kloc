@@ -3,18 +3,10 @@
 # --- 1. AUTOMATIC ADMINISTRATOR ELEVATION ---
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
-
-    $scriptUrl = "https://raw.githubusercontent.com/avm3005/Kloc/main/Setup/KlocV1.0.3.ps1"
-    $tempScript = Join-Path $env:TEMP "KlocV1.0.3.ps1"
-
-    Invoke-WebRequest -Uri $scriptUrl -OutFile $tempScript
-
-    Start-Process powershell.exe `
-        -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`"" `
-        -Verb RunAs
-
-    exit
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    Exit
 }
+
 Write-Host "=================================================" -ForegroundColor Cyan
 Write-Host "     Kloc Desktop Clock Installer - v1.0.3       " -ForegroundColor White
 Write-Host "=================================================" -ForegroundColor Cyan
@@ -34,7 +26,6 @@ Write-Host "[*] Terminating existing background processes..." -ForegroundColor D
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "Kloc.ps1" -or $_.Name -match "Kloc.exe" } | Invoke-CimMethod -MethodName Terminate | Out-Null
 
 $installDir = "C:\Program Files\Detaroxz\Kloc"
-# FIX: Use CommonPrograms (All Users) to prevent Administrator elevation path-resolution failures
 $startMenuDir = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "Kloc"
 
 Write-Host "[*] Cleaning up old application data..." -ForegroundColor DarkGray
@@ -112,7 +103,7 @@ Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 
-# Inject C# for WorkerW Desktop Binding & Memory Management
+# Inject C# for WorkerW Desktop Binding, Window Positioning & Memory Management
 $signature = @"
 using System;
 using System.Diagnostics;
@@ -145,6 +136,9 @@ public class Win32 {
     [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
     public static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
     
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
     [DllImport("kernel32.dll")]
     public static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
 
@@ -157,6 +151,17 @@ public class Win32 {
         } catch {}
     }
     
+    public static void EnforceDesktopPosition(IntPtr hwnd, bool alwaysOnTop) {
+        IntPtr HWND_BOTTOM = new IntPtr(1);
+        IntPtr HWND_TOPMOST = new IntPtr(-1);
+        uint flags = 0x0001 | 0x0002 | 0x0010 | 0x0200; // SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER
+        if (alwaysOnTop) {
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags);
+        } else {
+            SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, flags);
+        }
+    }
+
     public static void BindToDesktop(IntPtr hwnd) {
         IntPtr progman = FindWindow("Progman", null);
         IntPtr result;
@@ -406,6 +411,10 @@ function Apply-Layout {
     }
     
     $TimeText.Text = ""; $AmPmText.Text = ""; $DateText.Text = ""; $DayText.Text = ""
+    
+    if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
+        [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
+    }
 }
 
 # Secondary timer strictly for executing 10s delayed Garbage Collection
@@ -480,6 +489,11 @@ $script:TickAction = {
             $script:tickCounter = 0
             [Win32]::TrimMemory()
         }
+    }
+    
+    # Constant Background Anchor Guard
+    if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
+        [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
     }
 }
 
@@ -867,10 +881,8 @@ function Show-SettingsWindow {
         $setWindow.FindName("chkSeconds").IsEnabled = $timeIsOn
         $amPmEnabled = ($global:Settings.UseAmPm -and $timeIsOn)
         $setWindow.FindName("chkAmPmShow").IsEnabled = $amPmEnabled
-        $setWindow.FindName("btnFontAmPm").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
-        $setWindow.FindName("chkCapsAmPm").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
-        $setWindow.FindName("sldAmPmOffsetY").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
-        $setWindow.FindName("sldAmPmSpacing").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
+        $setWindow.FindName("btnFontAmPm").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm); $setWindow.FindName("chkCapsAmPm").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
+        $setWindow.FindName("sldAmPmOffsetY").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm); $setWindow.FindName("sldAmPmSpacing").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
         $setWindow.FindName("lblFontAmPm").Opacity = if($amPmEnabled -and $global:Settings.ShowAmPm){1}else{0.5}
 
         $setWindow.FindName("btnFontTime").IsEnabled = $timeIsOn; $setWindow.FindName("chkCapsTime").IsEnabled = $timeIsOn; $setWindow.FindName("lblFontTime").Opacity = if($timeIsOn){1}else{0.5}
@@ -1117,28 +1129,34 @@ function Show-SettingsWindow {
 
 $window.Add_Loaded({
     $script:clockHwnd = (New-Object System.Windows.Interop.WindowInteropHelper($window)).Handle
-    # Hide from Alt+Tab
+    
+    # Hide from Alt+Tab AND Prevent Activation Focus (fixes Win+D top-layer rendering bug)
     $exStyle = [Win32]::GetWindowLong($script:clockHwnd, -20)
-    [Win32]::SetWindowLong($script:clockHwnd, -20, $exStyle -bor 0x00000080) | Out-Null
+    [Win32]::SetWindowLong($script:clockHwnd, -20, $exStyle -bor 0x00000080 -bor 0x08000000) | Out-Null
     
+    # Win32 Event Hook to strictly intercept Win+D (WM_SHOWWINDOW) and immediately force Z-order to bottom
+    $script:hookDelegate = [System.Windows.Interop.HwndSourceHook]{
+        param([IntPtr]$hwnd, [int]$msg, [IntPtr]$wParam, [IntPtr]$lParam, [ref]$handled)
+        if ($msg -eq 0x0018) {
+            $window.Dispatcher.BeginInvoke([Action]{
+                if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
+                    [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
+                }
+            }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
+        }
+        return [IntPtr]::Zero
+    }
+    $source = [System.Windows.Interop.HwndSource]::FromHwnd($script:clockHwnd)
+    $source.AddHook($script:hookDelegate)
+
     Apply-Layout
-    &$script:TickAction
     
-    if ($global:Settings.AlwaysOnTop) {
-        $window.Topmost = $true
-    } else {
-        $window.Topmost = $false
+    if (-not $global:Settings.AlwaysOnTop) {
         [Win32]::BindToDesktop($script:clockHwnd)
     }
     
     $window.Opacity = 1
     [Win32]::TrimMemory()
-})
-
-$window.Add_ContentRendered({
-    if (-not $global:Settings.AlwaysOnTop) {
-        [Win32]::BindToDesktop($script:clockHwnd)
-    }
 })
 
 $sysTray = New-Object System.Windows.Forms.NotifyIcon
