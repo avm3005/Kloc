@@ -3,8 +3,17 @@
 # --- 1. AUTOMATIC ADMINISTRATOR ELEVATION ---
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    Exit
+
+    $scriptUrl = "https://raw.githubusercontent.com/avm3005/Kloc/main/Setup/KlocV1.0.3.ps1"
+    $tempScript = Join-Path $env:TEMP "KlocV1.0.0.ps1"
+
+    Invoke-WebRequest -Uri $scriptUrl -OutFile $tempScript
+
+    Start-Process powershell.exe `
+        -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`"" `
+        -Verb RunAs
+
+    exit
 }
 
 Write-Host "=================================================" -ForegroundColor Cyan
@@ -26,11 +35,14 @@ Write-Host "[*] Terminating existing background processes..." -ForegroundColor D
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "Kloc.ps1" -or $_.Name -match "Kloc.exe" } | Invoke-CimMethod -MethodName Terminate | Out-Null
 
 $installDir = "C:\Program Files\Detaroxz\Kloc"
-$startMenuDir = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "Kloc"
+$commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
 
 Write-Host "[*] Cleaning up old application data..." -ForegroundColor DarkGray
 if (Test-Path $installDir) { Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue }
-if (Test-Path $startMenuDir) { Remove-Item -Path $startMenuDir -Recurse -Force -ErrorAction SilentlyContinue }
+
+$mainShortcutPath = Join-Path $commonPrograms "Kloc.lnk"
+if (Test-Path $mainShortcutPath) { Remove-Item $mainShortcutPath -Force -ErrorAction SilentlyContinue }
+
 Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Kloc" -ErrorAction SilentlyContinue
 $shortcutPath = Join-Path ([Environment]::GetFolderPath('Startup')) "Kloc.lnk"
 if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force -ErrorAction SilentlyContinue }
@@ -38,7 +50,6 @@ Unregister-ScheduledTask -TaskName "KlocDesktopClock" -Confirm:$false -ErrorActi
 Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Kloc" -Recurse -Force -ErrorAction SilentlyContinue
 
 New-Item -Path $installDir -ItemType Directory -Force | Out-Null
-if (-not (Test-Path $startMenuDir)) { New-Item -Path $startMenuDir -ItemType Directory -Force | Out-Null }
 if (-not (Test-Path $appDataFolder)) { New-Item -Path $appDataFolder -ItemType Directory -Force | Out-Null }
 
 if ($null -ne $existingSettings) {
@@ -54,15 +65,12 @@ $g = [System.Drawing.Graphics]::FromImage($bmp)
 $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 $g.Clear([System.Drawing.Color]::Transparent)
 
-# Yellow offset circle (Bottom Layer)
 $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#EFD9A0"))), 12, 12, 210, 210)
-# Blue main circle (Middle Layer)
 $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#98C4D8"))), 24, 24, 210, 210)
-# White Hands (Top Layer)
 $wPen = New-Object System.Drawing.Pen([System.Drawing.ColorTranslator]::FromHtml("#FEFEFE"), 18)
 $wPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round; $wPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-$g.DrawLine($wPen, 129, 129, 129, 65)  # Minute hand
-$g.DrawLine($wPen, 129, 129, 185, 129) # Hour hand
+$g.DrawLine($wPen, 129, 129, 129, 65)
+$g.DrawLine($wPen, 129, 129, 185, 129)
 
 $ms = New-Object System.IO.MemoryStream
 $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
@@ -73,26 +81,9 @@ $bw.Write([int16]0); $bw.Write([int16]1); $bw.Write([int16]1); $bw.Write([byte]0
 $bw.Write([int32]$pngBytes.Length); $bw.Write([int32]22); $bw.Write($pngBytes)
 $bw.Flush(); $icoStream.Dispose(); $ms.Dispose(); $g.Dispose(); $bmp.Dispose()
 
-# --- 4. BUILD THE TASK MANAGER EXECUTABLE (USING NATIVE C# COMPILER) ---
-Write-Host "[*] Compiling Native Background Wrapper..." -ForegroundColor Cyan
-$exeSource = @"
-using System.Diagnostics;
-public class Program {
-    public static void Main() {
-        Process p = new Process();
-        p.StartInfo.FileName = "powershell.exe";
-        p.StartInfo.Arguments = "-ExecutionPolicy Bypass -WindowStyle Hidden -File \"C:\\Program Files\\Detaroxz\\Kloc\\Kloc.ps1\"";
-        p.StartInfo.UseShellExecute = false;
-        p.StartInfo.CreateNoWindow = true;
-        p.Start();
-    }
-}
-"@
-Set-Content -Path "$installDir\KlocSource.cs" -Value $exeSource -Encoding UTF8
-$csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-if (-not (Test-Path $csc)) { $csc = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe" }
-Start-Process -FilePath $csc -ArgumentList "/nologo /target:winexe /win32icon:`"$installDir\icon.ico`" /out:`"$installDir\Kloc.exe`" `"$installDir\KlocSource.cs`"" -Wait -WindowStyle Hidden
-Remove-Item "$installDir\KlocSource.cs" -Force
+# --- 4. BUILD THE TASK MANAGER EXECUTABLE (APP CONTROL BYPASS) ---
+Write-Host "[*] Creating Native Background Wrapper (Bypassing App Control)..." -ForegroundColor Cyan
+Copy-Item "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -Destination "$installDir\Kloc.exe" -Force
 
 # --- 5. DEFINE THE MAIN CLOCK SCRIPT PAYLOAD ---
 Write-Host "[*] Writing Kloc Engine & Layout logic..." -ForegroundColor Cyan
@@ -196,7 +187,6 @@ public class Win32 {
 "@
 Add-Type -TypeDefinition $signature -Language CSharp
 
-# Native Mutex Lock to ensure only 1 Kloc app can ever run
 $mutexCreated = $false
 $script:klocMutex = New-Object System.Threading.Mutex($true, "Global\KlocDesktopClock_Mutex", [ref]$mutexCreated)
 if (-not $mutexCreated) { Exit }
@@ -239,7 +229,7 @@ function Load-Settings {
 function Save-Settings ($SettingsObj) { $SettingsObj | ConvertTo-Json -Depth 2 | Set-Content $settingsFile -Force }
 $global:Settings = Load-Settings
 
-[xml]$clockXAML = @"
+$clockXAML = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         Title="Kloc" Background="Transparent" AllowsTransparency="True" WindowStyle="None" 
         SizeToContent="WidthAndHeight" ShowInTaskbar="False" Opacity="0">
@@ -261,8 +251,11 @@ $global:Settings = Load-Settings
     </Grid>
 </Window>
 "@
-$reader = New-Object System.Xml.XmlNodeReader $clockXAML
-$window = [System.Windows.Markup.XamlReader]::Load($reader)
+$stringReader = New-Object System.IO.StringReader($clockXAML)
+$xmlReader = [System.Xml.XmlReader]::Create($stringReader)
+$window = [System.Windows.Markup.XamlReader]::Load($xmlReader)
+$xmlReader.Close()
+$stringReader.Dispose()
 
 $RootGrid = $window.FindName("RootGrid")
 $MainPanel = $window.FindName("MainPanel")
@@ -385,7 +378,6 @@ function Apply-Layout {
         $MainPanel.Children.Add($TimePanel); $MainPanel.Children.Add($DateDayPanel); $MainPanel.Children.Add($QuotePanel)
     }
 
-    # --- CALCULATOR & MAX BOUNDS CENTERING LOGIC ---
     $RootGrid.Width = [double]::NaN
     $RootGrid.Height = [double]::NaN
     
@@ -411,13 +403,8 @@ function Apply-Layout {
     }
     
     $TimeText.Text = ""; $AmPmText.Text = ""; $DateText.Text = ""; $DayText.Text = ""
-    
-    if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
-        [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
-    }
 }
 
-# Secondary timer strictly for executing 10s delayed Garbage Collection
 $script:gcTimer = New-Object System.Windows.Threading.DispatcherTimer
 $script:gcTimer.Interval = [TimeSpan]::FromSeconds(10)
 $script:gcTimer.Add_Tick({
@@ -430,7 +417,6 @@ $timer.Interval = [TimeSpan]::FromMilliseconds(500)
 
 $script:tickCounter = 0
 $script:TickAction = {
-    # Check for Start Menu Shortcut Trigger
     $flagPath = "$env:APPDATA\Detaroxz\Kloc\open_settings.flag"
     if (Test-Path $flagPath) {
         Remove-Item $flagPath -Force -ErrorAction SilentlyContinue
@@ -491,7 +477,6 @@ $script:TickAction = {
         }
     }
     
-    # Constant Background Anchor Guard
     if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
         [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
     }
@@ -513,14 +498,15 @@ function Update-StartupManager {
         $WshShell = New-Object -ComObject WScript.Shell
         $Shortcut = $WshShell.CreateShortcut($shortcutPath)
         $Shortcut.TargetPath = "C:\Program Files\Detaroxz\Kloc\Kloc.exe"
+        $Shortcut.Arguments = "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"C:\Program Files\Detaroxz\Kloc\Kloc.ps1`""
         $Shortcut.IconLocation = "C:\Program Files\Detaroxz\Kloc\icon.ico"
         $Shortcut.WindowStyle = 0
         $Shortcut.Save()
     } elseif ($global:Settings.StartupMethod -eq "Registry (HKCU Run)") {
-        Set-ItemProperty -Path $regPath -Name "Kloc" -Value "`"C:\Program Files\Detaroxz\Kloc\Kloc.exe`""
+        Set-ItemProperty -Path $regPath -Name "Kloc" -Value "`"C:\Program Files\Detaroxz\Kloc\Kloc.exe`" -ExecutionPolicy Bypass -WindowStyle Hidden -File `"C:\Program Files\Detaroxz\Kloc\Kloc.ps1`""
     } elseif ($global:Settings.StartupMethod -eq "Task Scheduler (Highest Privileges)") {
         try {
-            $action = New-ScheduledTaskAction -Execute "C:\Program Files\Detaroxz\Kloc\Kloc.exe"
+            $action = New-ScheduledTaskAction -Execute "C:\Program Files\Detaroxz\Kloc\Kloc.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"C:\Program Files\Detaroxz\Kloc\Kloc.ps1`""
             $trigger = New-ScheduledTaskTrigger -AtLogon
             $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0
             Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Force | Out-Null
@@ -537,16 +523,42 @@ function Show-SettingsWindow {
     
     $global:Settings = Load-Settings
 
-    [xml]$setXAML = @"
-    <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Title="Kloc Settings (v1.0.3)" Width="550" Height="750" WindowStartupLocation="CenterScreen" Topmost="True" ResizeMode="NoResize">
-        <Grid>
-            <TabControl Background="Transparent" BorderThickness="0" Margin="10">
+    $setXAML = @"
+    <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+            xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+            Title="Kloc Settings (v1.0.3)" Width="600" Height="780" WindowStartupLocation="CenterScreen" Topmost="True" ResizeMode="NoResize" Background="#FAFAFA" FontFamily="Segoe UI">
+        <Grid Margin="5">
+            <TabControl Background="#FFFFFF" BorderBrush="#DDDDDD" BorderThickness="1" Margin="5">
+                <TabControl.Resources>
+                    <Style TargetType="TabItem">
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="TabItem">
+                                    <Border Name="Border" BorderThickness="0,0,0,3" BorderBrush="Transparent" Padding="15,8" Margin="0,0,5,0" Background="Transparent" Cursor="Hand">
+                                        <ContentPresenter x:Name="ContentSite" VerticalAlignment="Center" HorizontalAlignment="Center" ContentSource="Header"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Border" Property="BorderBrush" Value="#005A9E"/>
+                                            <Setter Property="TextElement.Foreground" Value="#005A9E"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Border" Property="Background" Value="#EBEBEB"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </TabControl.Resources>
                 
-                <TabItem Header="General" Padding="15,5">
+                <TabItem Header="General" FontSize="14" Padding="15,5">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="10">
-                            <TextBlock Text="Typography &amp; Fonts" FontWeight="Bold" Margin="0,0,0,15"/>
-                            <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
+                        <StackPanel Margin="15,20,15,15">
+                            <TextBlock Text="Typography &amp; Fonts" FontWeight="Bold" FontSize="15" Margin="0,0,0,15"/>
+                            <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="70"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
                                 <CheckBox Name="chkTime" Content="Time" Grid.Column="0" VerticalAlignment="Center"/>
                                 <Button Name="btnFontTime" Content="Select Font" Grid.Column="1" Padding="5,3"/>
                                 <TextBlock Name="lblFontTime" Text="..." Grid.Column="2" VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"/>
@@ -558,29 +570,30 @@ function Show-SettingsWindow {
                             </StackPanel>
                             
                             <!-- AM/PM Settings -->
-                            <Grid Margin="20,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
+                            <Grid Margin="20,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
                                 <CheckBox Name="chkAmPmShow" Content="Show AM/PM" Grid.Column="0" VerticalAlignment="Center"/>
                                 <Button Name="btnFontAmPm" Content="Select Font" Grid.Column="1" Padding="5,3"/>
                                 <TextBlock Name="lblFontAmPm" Text="..." Grid.Column="2" VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"/>
                                 <CheckBox Name="chkCapsAmPm" Content="All Caps" Grid.Column="3" VerticalAlignment="Center"/>
                             </Grid>
-                            <Grid Margin="20,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="65"/><ColumnDefinition Width="*"/><ColumnDefinition Width="35"/><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                            <Grid Margin="20,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Spacing:" VerticalAlignment="Center" Grid.Column="0"/>
                                 <Slider Name="sldAmPmSpacing" Minimum="-50" Maximum="50" Value="5" Grid.Column="1" VerticalAlignment="Center" TickFrequency="1" IsSnapToTickEnabled="True"/>
                                 <TextBlock Name="lblAmPmSpacing" Text="5" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                
-                                <TextBlock Text="Vert Offset:" VerticalAlignment="Center" Grid.Column="3" Margin="10,0,0,0"/>
-                                <Slider Name="sldAmPmOffsetY" Minimum="-200" Maximum="200" Value="0" Grid.Column="4" VerticalAlignment="Center" TickFrequency="1" IsSnapToTickEnabled="True"/>
-                                <TextBlock Name="lblAmPmOffsetY" Text="0" Grid.Column="5" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                            </Grid>
+                            <Grid Margin="20,0,0,25"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Vert Offset:" VerticalAlignment="Center" Grid.Column="0"/>
+                                <Slider Name="sldAmPmOffsetY" Minimum="-200" Maximum="200" Value="0" Grid.Column="1" VerticalAlignment="Center" TickFrequency="1" IsSnapToTickEnabled="True"/>
+                                <TextBlock Name="lblAmPmOffsetY" Text="0" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                             </Grid>
 
-                            <Grid Margin="0,5,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
+                            <Grid Margin="0,5,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="70"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
                                 <CheckBox Name="chkDate" Content="Date" Grid.Column="0" VerticalAlignment="Center"/>
                                 <Button Name="btnFontDate" Content="Select Font" Grid.Column="1" Padding="5,3"/>
                                 <TextBlock Name="lblFontDate" Text="..." Grid.Column="2" VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"/>
                                 <CheckBox Name="chkCapsDate" Content="All Caps" Grid.Column="3" VerticalAlignment="Center"/>
                             </Grid>
-                            <Grid Margin="0,0,0,20"><Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
+                            <Grid Margin="0,0,0,20"><Grid.ColumnDefinitions><ColumnDefinition Width="70"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
                                 <CheckBox Name="chkDay" Content="Day" Grid.Column="0" VerticalAlignment="Center"/>
                                 <Button Name="btnFontDay" Content="Select Font" Grid.Column="1" Padding="5,3"/>
                                 <TextBlock Name="lblFontDay" Text="..." Grid.Column="2" VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"/>
@@ -590,12 +603,12 @@ function Show-SettingsWindow {
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Colors" Padding="15,5">
+                <TabItem Header="Colors" FontSize="14" Padding="15,5">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="10">
-                            <TextBlock Text="Colors &amp; Appearance" FontWeight="Bold" Margin="0,0,0,15"/>
+                        <StackPanel Margin="15,20,15,15">
+                            <TextBlock Text="Colors &amp; Appearance" FontWeight="Bold" FontSize="15" Margin="0,0,0,15"/>
                             
-                            <Grid Margin="0,0,0,15"><Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                            <Grid Margin="0,0,0,20"><Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Text Opacity:" VerticalAlignment="Center" Grid.Column="0"/>
                                 <Slider Name="sldTextOpacity" Minimum="0" Maximum="100" Value="100" Grid.Column="1" VerticalAlignment="Center" TickFrequency="1" IsSnapToTickEnabled="True"/>
                                 <TextBlock Name="lblTextOpacity" Text="100%" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"/>
@@ -614,32 +627,32 @@ function Show-SettingsWindow {
                             </StackPanel>
 
                             <!-- Individual Color Engine -->
-                            <StackPanel Name="panelIndividualColors" Visibility="Collapsed" Margin="10,0,0,15">
-                                <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <StackPanel Name="panelIndividualColors" Visibility="Collapsed" Margin="10,0,0,20">
+                                <Grid Margin="0,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Time:" VerticalAlignment="Center" Grid.Column="0"/>
                                     <Button Name="btnColorTime" Content="Pick Color" Grid.Column="1" Padding="5,3"/>
                                     <Rectangle Name="rectColorTime" Width="20" Height="20" Grid.Column="2" Stroke="Black" Margin="5,0"/>
                                     <TextBlock Name="lblColorTime" Text="#FFFFFF" Grid.Column="3" VerticalAlignment="Center"/>
                                 </Grid>
-                                <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid Margin="0,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="AM/PM:" VerticalAlignment="Center" Grid.Column="0"/>
                                     <Button Name="btnColorAmPm" Content="Pick Color" Grid.Column="1" Padding="5,3"/>
                                     <Rectangle Name="rectColorAmPm" Width="20" Height="20" Grid.Column="2" Stroke="Black" Margin="5,0"/>
                                     <TextBlock Name="lblColorAmPm" Text="#FFFFFF" Grid.Column="3" VerticalAlignment="Center"/>
                                 </Grid>
-                                <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid Margin="0,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Date:" VerticalAlignment="Center" Grid.Column="0"/>
                                     <Button Name="btnColorDate" Content="Pick Color" Grid.Column="1" Padding="5,3"/>
                                     <Rectangle Name="rectColorDate" Width="20" Height="20" Grid.Column="2" Stroke="Black" Margin="5,0"/>
                                     <TextBlock Name="lblColorDate" Text="#FFFFFF" Grid.Column="3" VerticalAlignment="Center"/>
                                 </Grid>
-                                <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid Margin="0,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Day:" VerticalAlignment="Center" Grid.Column="0"/>
                                     <Button Name="btnColorDay" Content="Pick Color" Grid.Column="1" Padding="5,3"/>
                                     <Rectangle Name="rectColorDay" Width="20" Height="20" Grid.Column="2" Stroke="Black" Margin="5,0"/>
                                     <TextBlock Name="lblColorDay" Text="#FFFFFF" Grid.Column="3" VerticalAlignment="Center"/>
                                 </Grid>
-                                <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid Margin="0,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Quote Line 1:" VerticalAlignment="Center" Grid.Column="0"/>
                                     <Button Name="btnColorQuote1" Content="Pick Color" Grid.Column="1" Padding="5,3"/>
                                     <Rectangle Name="rectColorQuote1" Width="20" Height="20" Grid.Column="2" Stroke="Black" Margin="5,0"/>
@@ -652,6 +665,8 @@ function Show-SettingsWindow {
                                     <TextBlock Name="lblColorQuote2" Text="#FFFFFF" Grid.Column="3" VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
+
+                            <Separator Margin="0,10,0,20" />
 
                             <CheckBox Name="chkShadow" Content="Enable Text Drop Shadow" Margin="0,0,0,10"/>
                             <CheckBox Name="chkShowBg" Content="Enable Background" Margin="0,0,0,10"/>
@@ -670,16 +685,16 @@ function Show-SettingsWindow {
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Quotes" Padding="15,5">
+                <TabItem Header="Quotes" FontSize="14" Padding="15,5">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="10">
-                            <TextBlock Text="Display Quotes below the clock. Use \n for new lines." FontStyle="Italic" Margin="0,0,0,15" Foreground="#666666"/>
+                        <StackPanel Margin="15,20,15,15">
+                            <TextBlock Text="Display Quotes below the clock. Use \n for new lines." FontStyle="Italic" Margin="0,0,0,20" Foreground="#666666"/>
                             
                             <!-- Quote 1 -->
                             <TextBlock Text="Quote Line 1" FontWeight="Bold" Margin="0,0,0,10"/>
                             <CheckBox Name="chkShowQuote1" Content="Enable Quote 1" Margin="0,0,0,10"/>
                             <TextBox Name="txtQuote1" Height="60" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,10" VerticalScrollBarVisibility="Auto"/>
-                            <Grid Margin="0,0,0,25"><Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
+                            <Grid Margin="0,0,0,30"><Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
                                 <Button Name="btnFontQuote1" Content="Select Font" Grid.Column="0" Padding="5,3"/>
                                 <TextBlock Name="lblFontQuote1" Text="..." Grid.Column="1" VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"/>
                                 <CheckBox Name="chkCapsQuote1" Content="All Caps" Grid.Column="2" VerticalAlignment="Center"/>
@@ -689,12 +704,13 @@ function Show-SettingsWindow {
                             <TextBlock Text="Quote Line 2" FontWeight="Bold" Margin="0,0,0,10"/>
                             <CheckBox Name="chkShowQuote2" Content="Enable Quote 2" Margin="0,0,0,10"/>
                             <TextBox Name="txtQuote2" Height="60" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,0,0,10" VerticalScrollBarVisibility="Auto"/>
-                            <Grid Margin="0,0,0,25"><Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
+                            <Grid Margin="0,0,0,30"><Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
                                 <Button Name="btnFontQuote2" Content="Select Font" Grid.Column="0" Padding="5,3"/>
                                 <TextBlock Name="lblFontQuote2" Text="..." Grid.Column="1" VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"/>
                                 <CheckBox Name="chkCapsQuote2" Content="All Caps" Grid.Column="2" VerticalAlignment="Center"/>
                             </Grid>
 
+                            <Separator Margin="0,0,0,20"/>
                             <Grid Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="60"/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Quote Vertical Spacing:" VerticalAlignment="Center" Grid.Column="0"/>
                                 <TextBox Name="txtQuoteSpacing" Grid.Column="1" Margin="0,0,5,0" VerticalContentAlignment="Center"/>
@@ -704,11 +720,11 @@ function Show-SettingsWindow {
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Advanced" Padding="15,5">
+                <TabItem Header="Advanced" FontSize="14" Padding="15,5">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="10">
+                        <StackPanel Margin="15,20,15,15">
                             
-                            <TextBlock Text="Configuration Management" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <TextBlock Text="Configuration Management" FontWeight="Bold" FontSize="15" Margin="0,0,0,10"/>
                             <Grid Margin="0,0,0,25">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -722,29 +738,29 @@ function Show-SettingsWindow {
                                 <Button Name="btnRefresh" Content="Refresh" Margin="5,0,0,0" Grid.Column="3" Padding="5"/>
                             </Grid>
 
-                            <TextBlock Text="Custom Layout &amp; Slider Limits" FontWeight="Bold" Margin="0,0,0,10"/>
-                            <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="60"/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Custom Layout &amp; Slider Limits" FontWeight="Bold" FontSize="15" Margin="0,0,0,10"/>
+                            <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="60"/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Spacing between lines (Time &amp; Date):" VerticalAlignment="Center" Grid.Column="0"/>
                                 <TextBox Name="txtLineSpacing" Grid.Column="1" Margin="0,0,5,0" VerticalContentAlignment="Center"/>
                                 <Button Name="btnLineSpacing" Content="Apply" Grid.Column="2"/>
                             </Grid>
-                            <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="60"/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions>
+                            <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="60"/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Spacing between Date &amp; Day:" VerticalAlignment="Center" Grid.Column="0"/>
                                 <TextBox Name="txtDateDaySpacing" Grid.Column="1" Margin="0,0,5,0" VerticalContentAlignment="Center"/>
                                 <Button Name="btnDateDaySpacing" Content="Apply" Grid.Column="2"/>
                             </Grid>
-                            <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="60"/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="AM/PM Vertical Offset Limit (±):" VerticalAlignment="Center" Grid.Column="0"/>
+                            <Grid Margin="0,0,0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="60"/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="AM/PM Vertical Offset Limit (+/-):" VerticalAlignment="Center" Grid.Column="0"/>
                                 <TextBox Name="txtLimitOffset" Grid.Column="1" Margin="0,0,5,0" VerticalContentAlignment="Center"/>
                                 <Button Name="btnLimitOffset" Content="Apply" Grid.Column="2"/>
                             </Grid>
-                            <Grid Margin="0,0,0,25"><Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="60"/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="AM/PM Spacing Limit (±):" VerticalAlignment="Center" Grid.Column="0"/>
+                            <Grid Margin="0,0,0,25"><Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="60"/><ColumnDefinition Width="60"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="AM/PM Spacing Limit (+/-):" VerticalAlignment="Center" Grid.Column="0"/>
                                 <TextBox Name="txtLimitSpacing" Grid.Column="1" Margin="0,0,5,0" VerticalContentAlignment="Center"/>
                                 <Button Name="btnLimitSpacing" Content="Apply" Grid.Column="2"/>
                             </Grid>
                         
-                            <TextBlock Text="Positioning" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <TextBlock Text="Positioning" FontWeight="Bold" FontSize="15" Margin="0,0,0,10"/>
                             <Grid Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="150"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Position Mode:" VerticalAlignment="Center" Grid.Column="0"/>
                                 <ComboBox Name="cmbPositionMode" Grid.Column="1">
@@ -753,13 +769,13 @@ function Show-SettingsWindow {
                                 </ComboBox>
                             </Grid>
                             <CheckBox Name="chkLock" Content="Lock Position (Disable Dragging in Fixed Mode)" Margin="0,0,0,5"/>
-                            <CheckBox Name="chkIncludeTaskbar" Content="Include Taskbar in Center Calculation (Whole Monitor)" Margin="0,0,0,25"/>
+                            <CheckBox Name="chkIncludeTaskbar" Content="Include Taskbar in Center Calculation" Margin="0,0,0,25"/>
 
-                            <TextBlock Text="Window &amp; Layout" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <TextBlock Text="Window &amp; Layout" FontWeight="Bold" FontSize="15" Margin="0,0,0,10"/>
                             <Grid Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="150"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Window Behavior:" VerticalAlignment="Center" Grid.Column="0"/>
                                 <ComboBox Name="cmbMode" Grid.Column="1">
-                                    <ComboBoxItem Content="Only on desktop (Immune to Gestures)"/>
+                                    <ComboBoxItem Content="Only on desktop"/>
                                     <ComboBoxItem Content="Always on top"/>
                                 </ComboBox>
                             </Grid>
@@ -772,26 +788,26 @@ function Show-SettingsWindow {
                             <CheckBox Name="chkSameLine" Content="Date and Day on same line" Margin="0,0,0,5"/>
                             <CheckBox Name="chkDateAbove" Content="Display Date/Day above Time" Margin="0,0,0,25"/>
 
-                            <TextBlock Text="System" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <TextBlock Text="System" FontWeight="Bold" FontSize="15" Margin="0,0,0,10"/>
                             <Grid Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Startup Method:" VerticalAlignment="Center" Grid.Column="0"/>
                                 <ComboBox Name="cmbStartup" Grid.Column="1">
                                     <ComboBoxItem Content="Disabled"/>
                                     <ComboBoxItem Content="Startup Folder (Shortcut)"/>
                                     <ComboBoxItem Content="Registry (HKCU Run)"/>
-                                    <ComboBoxItem Content="Task Scheduler (Highest Privileges)"/>
+                                    <ComboBoxItem Content="Task Scheduler"/>
                                 </ComboBox>
                             </Grid>
                             
-                            <Button Name="btnGC" Content="Trigger Garbage Collector" Padding="10,5" Margin="0,10,0,10" HorizontalAlignment="Left"/>
+                            <Button Name="btnGC" Content="Trigger Garbage Collector" Padding="15,6" Margin="0,10,0,10" HorizontalAlignment="Left"/>
                             
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="About" Padding="15,5">
-                    <StackPanel Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="Kloc Desktop Clock" FontSize="26" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,30,0,5"/>
+                <TabItem Header="About" FontSize="14" Padding="15,5">
+                    <StackPanel Margin="10,15,10,10" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="Kloc Desktop Clock" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,30,0,5"/>
                         <TextBlock Text="v1.0.3 by Detaroxz" FontSize="14" HorizontalAlignment="Center" Margin="0,0,0,30"/>
                         
                         <Button Name="btnRepo" Content="Project Repo (GitHub)" Padding="10,8" Margin="0,5" Width="260" Cursor="Hand" Background="#E5E5E5" BorderThickness="0"/>
@@ -808,8 +824,18 @@ function Show-SettingsWindow {
         </Grid>
     </Window>
 "@
-    $setReader = New-Object System.Xml.XmlNodeReader $setXAML
-    $setWindow = [System.Windows.Markup.XamlReader]::Load($setReader)
+    try {
+        $setStringReader = New-Object System.IO.StringReader($setXAML)
+        $setXmlReader = [System.Xml.XmlReader]::Create($setStringReader)
+        $setWindow = [System.Windows.Markup.XamlReader]::Load($setXmlReader)
+        $setXmlReader.Close()
+        $setStringReader.Dispose()
+    } catch {
+        $script:isSettingsOpen = $false
+        [System.Windows.MessageBox]::Show("UI Rendering Error: $_", "Kloc Setup Error", 0, 16) | Out-Null
+        return
+    }
+    
     $setWindow.Icon = [System.Windows.Media.Imaging.BitmapFrame]::Create([Uri]"file:///C:/Program Files/Detaroxz/Kloc/icon.ico")
 
     function Update-FontLabel($lbl, $tag) {
@@ -1180,10 +1206,13 @@ $uninstallContent = @'
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs; Exit }
 Write-Host "Uninstalling Kloc v1.0.3..." -ForegroundColor Cyan
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "Kloc.ps1" -or $_.Name -match "Kloc.exe" } | Invoke-CimMethod -MethodName Terminate | Out-Null
-$installDir = "C:\Program Files\Detaroxz\Kloc"; $appDataDir = "$env:APPDATA\Detaroxz\Kloc"; $startMenuDir = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) "Kloc"
+$installDir = "C:\Program Files\Detaroxz\Kloc"; $appDataDir = "$env:APPDATA\Detaroxz\Kloc"; $commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
 if (Test-Path $installDir) { Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue }
 if (Test-Path $appDataDir) { Remove-Item -Path $appDataDir -Recurse -Force -ErrorAction SilentlyContinue }
-if (Test-Path $startMenuDir) { Remove-Item -Path $startMenuDir -Recurse -Force -ErrorAction SilentlyContinue }
+
+$mainShortcutPath = Join-Path $commonPrograms "Kloc.lnk"
+if (Test-Path $mainShortcutPath) { Remove-Item $mainShortcutPath -Force -ErrorAction SilentlyContinue }
+
 Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Kloc" -ErrorAction SilentlyContinue
 $shortcutPath = Join-Path ([Environment]::GetFolderPath('Startup')) "Kloc.lnk"
 if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force -ErrorAction SilentlyContinue }
@@ -1193,27 +1222,13 @@ Write-Host "Uninstallation Complete!" -ForegroundColor Green; Start-Sleep -Secon
 '@
 Set-Content -Path "$installDir\Uninstall.ps1" -Value $uninstallContent -Encoding UTF8
 
-# Generate Silent Open Settings VBScript Trigger
-$settingsVbs = @'
-Set fso = CreateObject("Scripting.FileSystemObject")
-Set ws = CreateObject("WScript.Shell")
-flagFile = ws.ExpandEnvironmentStrings("%APPDATA%") & "\Detaroxz\Kloc\open_settings.flag"
-Set file = fso.CreateTextFile(flagFile, True)
-file.Close
-'@
-Set-Content -Path "$installDir\OpenSettings.vbs" -Value $settingsVbs -Encoding Ascii
-
 $WshShell = New-Object -ComObject WScript.Shell
-$shortcutStart = $WshShell.CreateShortcut((Join-Path $startMenuDir "Start Kloc.lnk"))
+$mainShortcutPath = Join-Path $commonPrograms "Kloc.lnk"
+$shortcutStart = $WshShell.CreateShortcut($mainShortcutPath)
 $shortcutStart.TargetPath = "C:\Program Files\Detaroxz\Kloc\Kloc.exe"
+$shortcutStart.Arguments = "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"C:\Program Files\Detaroxz\Kloc\Kloc.ps1`""
 $shortcutStart.IconLocation = "C:\Program Files\Detaroxz\Kloc\icon.ico"
 $shortcutStart.Save()
-
-$shortcutSettings = $WshShell.CreateShortcut((Join-Path $startMenuDir "Settings Kloc.lnk"))
-$shortcutSettings.TargetPath = "wscript.exe"
-$shortcutSettings.Arguments = "`"C:\Program Files\Detaroxz\Kloc\OpenSettings.vbs`""
-$shortcutSettings.IconLocation = "C:\Program Files\Detaroxz\Kloc\icon.ico"
-$shortcutSettings.Save()
 
 # --- 7. REGISTRY & LAUNCH ---
 $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Kloc"
@@ -1226,5 +1241,5 @@ Set-ItemProperty -Path $regPath -Name "NoModify" -Value 1; Set-ItemProperty -Pat
 Write-Host "=================================================" -ForegroundColor Cyan
 Write-Host " Installation Complete! Launching Kloc v1.0.3... " -ForegroundColor Green
 Write-Host "=================================================" -ForegroundColor Cyan
-Start-Process "$installDir\Kloc.exe"
+Start-Process -FilePath "$installDir\Kloc.exe" -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$installDir\Kloc.ps1`"" -WindowStyle Hidden
 Start-Sleep -Seconds 2
