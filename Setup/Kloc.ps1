@@ -4,8 +4,8 @@
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
 
-    $scriptUrl = "https://raw.githubusercontent.com/avm3005/Kloc/main/Setup/KlocV1.0.3.ps1"
-    $tempScript = Join-Path $env:TEMP "KlocV1.0.0.ps1"
+    $scriptUrl = "https://raw.githubusercontent.com/avm3005/Kloc/main/Setup/Kloc.ps1"
+    $tempScript = Join-Path $env:TEMP "Kloc.ps1"
 
     Invoke-WebRequest -Uri $scriptUrl -OutFile $tempScript
 
@@ -40,6 +40,8 @@ $commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
 Write-Host "[*] Cleaning up old application data..." -ForegroundColor DarkGray
 if (Test-Path $installDir) { Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue }
 
+$oldMenuDir = Join-Path $commonPrograms "Kloc"
+if (Test-Path $oldMenuDir) { Remove-Item -Path $oldMenuDir -Recurse -Force -ErrorAction SilentlyContinue }
 $mainShortcutPath = Join-Path $commonPrograms "Kloc.lnk"
 if (Test-Path $mainShortcutPath) { Remove-Item $mainShortcutPath -Force -ErrorAction SilentlyContinue }
 
@@ -81,9 +83,15 @@ $bw.Write([int16]0); $bw.Write([int16]1); $bw.Write([int16]1); $bw.Write([byte]0
 $bw.Write([int32]$pngBytes.Length); $bw.Write([int32]22); $bw.Write($pngBytes)
 $bw.Flush(); $icoStream.Dispose(); $ms.Dispose(); $g.Dispose(); $bmp.Dispose()
 
-# --- 4. BUILD THE TASK MANAGER EXECUTABLE (APP CONTROL BYPASS) ---
-Write-Host "[*] Creating Native Background Wrapper (Bypassing App Control)..." -ForegroundColor Cyan
+# --- 4. BUILD THE TASK MANAGER EXECUTABLE & INVISIBLE LAUNCHER ---
+Write-Host "[*] Creating Native Background Wrapper & Silencer..." -ForegroundColor Cyan
 Copy-Item "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -Destination "$installDir\Kloc.exe" -Force
+
+$launcherVbs = @'
+Set ws = CreateObject("WScript.Shell")
+ws.Run """C:\Program Files\Detaroxz\Kloc\Kloc.exe"" -ExecutionPolicy Bypass -WindowStyle Hidden -File ""C:\Program Files\Detaroxz\Kloc\Kloc.ps1""", 0, False
+'@
+Set-Content -Path "$installDir\Invisible.vbs" -Value $launcherVbs -Encoding Ascii
 
 # --- 5. DEFINE THE MAIN CLOCK SCRIPT PAYLOAD ---
 Write-Host "[*] Writing Kloc Engine & Layout logic..." -ForegroundColor Cyan
@@ -497,16 +505,16 @@ function Update-StartupManager {
     if ($global:Settings.StartupMethod -eq "Startup Folder (Shortcut)") {
         $WshShell = New-Object -ComObject WScript.Shell
         $Shortcut = $WshShell.CreateShortcut($shortcutPath)
-        $Shortcut.TargetPath = "C:\Program Files\Detaroxz\Kloc\Kloc.exe"
-        $Shortcut.Arguments = "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"C:\Program Files\Detaroxz\Kloc\Kloc.ps1`""
+        $Shortcut.TargetPath = "wscript.exe"
+        $Shortcut.Arguments = "`"C:\Program Files\Detaroxz\Kloc\Invisible.vbs`""
         $Shortcut.IconLocation = "C:\Program Files\Detaroxz\Kloc\icon.ico"
         $Shortcut.WindowStyle = 0
         $Shortcut.Save()
     } elseif ($global:Settings.StartupMethod -eq "Registry (HKCU Run)") {
-        Set-ItemProperty -Path $regPath -Name "Kloc" -Value "`"C:\Program Files\Detaroxz\Kloc\Kloc.exe`" -ExecutionPolicy Bypass -WindowStyle Hidden -File `"C:\Program Files\Detaroxz\Kloc\Kloc.ps1`""
+        Set-ItemProperty -Path $regPath -Name "Kloc" -Value "wscript.exe `"C:\Program Files\Detaroxz\Kloc\Invisible.vbs`""
     } elseif ($global:Settings.StartupMethod -eq "Task Scheduler (Highest Privileges)") {
         try {
-            $action = New-ScheduledTaskAction -Execute "C:\Program Files\Detaroxz\Kloc\Kloc.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"C:\Program Files\Detaroxz\Kloc\Kloc.ps1`""
+            $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"C:\Program Files\Detaroxz\Kloc\Invisible.vbs`""
             $trigger = New-ScheduledTaskTrigger -AtLogon
             $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0
             Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Force | Out-Null
