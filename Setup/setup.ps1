@@ -248,10 +248,8 @@ public class Win32 {
 
     public static void BindToDesktop(IntPtr hwnd) {
         IntPtr progman = FindWindow("Progman", null);
-        IntPtr result;
-        SendMessageTimeout(progman, 0x052C, IntPtr.Zero, IntPtr.Zero, 0, 1000, out result);
-        
         IntPtr workerw = IntPtr.Zero;
+        
         EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) => {
             IntPtr p = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
             if (p != IntPtr.Zero) {
@@ -259,6 +257,18 @@ public class Win32 {
             }
             return true;
         }), IntPtr.Zero);
+        
+        if (workerw == IntPtr.Zero) {
+            IntPtr result;
+            SendMessageTimeout(progman, 0x052C, IntPtr.Zero, IntPtr.Zero, 0, 1000, out result);
+            EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) => {
+                IntPtr p = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
+                if (p != IntPtr.Zero) {
+                    workerw = FindWindowEx(IntPtr.Zero, tophandle, "WorkerW", null);
+                }
+                return true;
+            }), IntPtr.Zero);
+        }
         
         if (workerw == IntPtr.Zero) { workerw = progman; }
         
@@ -509,7 +519,6 @@ $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(500)
 
 $script:isSettingsOpen = $false
-$script:isBoundToDesktop = $false
 
 $script:tickCounter = 0
 $script:TickAction = {
@@ -571,10 +580,6 @@ $script:TickAction = {
             $script:tickCounter = 0
             [Win32]::TrimMemory()
         }
-    }
-    
-    if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
-        [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
     }
 }
 
@@ -1101,17 +1106,11 @@ function Show-SettingsWindow {
         
         if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
             if ($global:Settings.AlwaysOnTop) {
-                if ($script:isBoundToDesktop) {
-                    [Win32]::UnbindFromDesktop($script:clockHwnd)
-                    $script:isBoundToDesktop = $false
-                }
+                [Win32]::UnbindFromDesktop($script:clockHwnd)
                 $window.Topmost = $true
             } else {
                 $window.Topmost = $false
-                if (-not $script:isBoundToDesktop) {
-                    [Win32]::BindToDesktop($script:clockHwnd)
-                    $script:isBoundToDesktop = $true
-                }
+                [Win32]::BindToDesktop($script:clockHwnd)
             }
             [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
         }
@@ -1279,13 +1278,10 @@ $window.Add_Loaded({
 
     Apply-Layout
     
-    if ($global:Settings.AlwaysOnTop) {
-        $window.Topmost = $true
-        $script:isBoundToDesktop = $false
-    } else {
-        $window.Topmost = $false
+    if (-not $global:Settings.AlwaysOnTop) {
         [Win32]::BindToDesktop($script:clockHwnd)
-        $script:isBoundToDesktop = $true
+    } else {
+        $window.Topmost = $true
     }
     
     $window.Opacity = 1
