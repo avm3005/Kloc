@@ -1,3 +1,4 @@
+Take a small survey from the dev: https://forms.gle/6cGvSZkkysyzptkWA
 # 🕒 Kloc Desktop Clock
 
 ![Windows Support](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&logo=windows)
