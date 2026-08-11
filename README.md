@@ -37,11 +37,11 @@ Unlike Electron-based widgets or heavy customization engines like Rainmeter, Klo
    ```
    iex (irm https://raw.githubusercontent.com/avm3005/Kloc/main/Setup/setup.ps1)
    ```
-4. The console will prompt you to pick a starting preset:
+3. The console will prompt you to pick a starting preset:
    * `[1]` Only big day (Black)
    * `[2]` Only big time (White)
    * `[3]` Balanced Default (Day, Date, and Time)
-5. Done! Kloc will automatically launch and place an icon in your System Tray.
+4. Done! Kloc will automatically launch and place an icon in your System Tray.
 
 ## ⚙️ Configuration & Usage
 
