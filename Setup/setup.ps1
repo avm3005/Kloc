@@ -1,4 +1,4 @@
-# Install-Kloc.ps1 - Single-File Setup for Kloc Desktop Clock v1.0.3
+# Install-Kloc.ps1 - Single-File Setup for Kloc Desktop Clock v1.0.0
 
 # --- 1. AUTOMATIC ADMINISTRATOR ELEVATION ---
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -8,11 +8,11 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 Write-Host "=================================================" -ForegroundColor Cyan
-Write-Host "     Kloc Desktop Clock Installer - v1.0.3       " -ForegroundColor White
+Write-Host "     Kloc Desktop Clock Installer - v1.0.0       " -ForegroundColor White
 Write-Host "=================================================" -ForegroundColor Cyan
 Start-Sleep -Seconds 1
 
-# --- 2. PREVIOUS INSTALLATION DETECTION & SETTINGS MIGRATION ---
+# --- 2. PREVIOUS INSTALLATION DETECTION & PRESET MIGRATION ---
 $appDataFolder = "$env:APPDATA\Detaroxz\Kloc"
 $settingsFile = "$appDataFolder\settings.json"
 $existingSettings = $null
@@ -22,6 +22,23 @@ if (Test-Path $settingsFile) {
     $existingSettings = Get-Content $settingsFile -Raw
 }
 
+Write-Host "`nPlease select a visual preset for Kloc:" -ForegroundColor Cyan
+Write-Host "(Note: you can customize everything in settings later)`n" -ForegroundColor DarkGray
+
+if ($null -ne $existingSettings) { Write-Host "0. Keep my existing settings" -ForegroundColor Yellow }
+Write-Host "1. Only big day - black"
+Write-Host "2. Only big time - white"
+Write-Host "3. Balanced Default - small font, white, day, date, and time"
+
+$defChoice = if ($null -ne $existingSettings) { "0" } else { "1" }
+$opts = if ($null -ne $existingSettings) { "0/1/2/3" } else { "1/2/3" }
+$choice = Read-Host "`nEnter your choice ($opts) [Default: $defChoice]"
+if ([string]::IsNullOrWhiteSpace($choice)) { $choice = $defChoice }
+
+$preset1 = @{ FontQuote1="Segoe UI"; ClockColor="#000000"; DateAboveTime=$false; Quote1Italic=$true; Quote2Bold=$false; SizeTime=48; SizeQuote1=18; ShadowEnabled=$false; FontQuote2="Segoe UI"; DateItalic=$false; Quote1Bold=$false; ColorDay="#FFFFFF"; DayItalic=$true; Quote2Italic=$false; Quote1AllCaps=$false; AmPmItalic=$false; FontTime="Segoe UI"; SizeQuote2=14; LineSpacing=0; DateAllCaps=$false; DayAllCaps=$false; ShowDay=$true; LimitOffset=200; Alignment="Center"; SizeDay=266.4; ShowBackground=$false; DateBold=$false; ColorDate="#FFFFFF"; DateDaySameLine=$false; QuoteSpacing=10; StartupMethod="Disabled"; TimeItalic=$false; PositionMode="Centered"; TimeBold=$false; ColorQuote1="#FFFFFF"; ShowSeconds=$false; AmPmAllCaps=$false; Quote2AllCaps=$false; UseIndividualColors=$false; ColorAmPm="#FFFFFF"; ShowTime=$false; ShowQuote2=$false; TextOpacity=100; DayBold=$true; BgOpacity=50; AmPmSpacing=5; FontDate="Segoe UI"; SizeDate=20; FontAmPm="Segoe UI"; SizeAmPm=20; IncludeTaskbarInCenter=$false; ShowDate=$false; AmPmOffsetY=0; ColorTime="#FFFFFF"; AmPmBold=$false; FontDay="Brush Script MT"; ColorQuote2="#FFFFFF"; AlwaysOnTop=$false; TimeAllCaps=$false; ShowAmPm=$true; LockPosition=$false; LimitSpacing=50; UseAmPm=$false; BackgroundColor="#FFFFFF"; Quote2Text="Make it count."; Quote1Text="Stay Focused"; ShowQuote1=$false; DateDaySpacing=10 }
+$preset2 = @{ ShowDate=$false; FontQuote1="Segoe UI"; ShowAmPm=$false; DateAboveTime=$false; ShowDay=$false; Quote2Bold=$false; SizeTime=400; ShadowEnabled=$false; Quote1Italic=$true; Quote1Bold=$false; ColorDay="#FFFFFF"; DayItalic=$true; Quote2Italic=$false; Quote1AllCaps=$false; AmPmItalic=$false; FontTime="Impact"; SizeQuote2=14; DayAllCaps=$false; FontQuote2="Segoe UI"; AmPmBold=$false; ShowBackground=$false; Alignment="Center"; SizeDay=266.4; LimitOffset=300; DateBold=$false; BgOpacity=50; QuoteSpacing=10; TimeItalic=$false; TextOpacity=100; DateItalic=$false; TimeBold=$false; ColorQuote1="#FFFFFF"; ShowSeconds=$false; AmPmAllCaps=$true; LineSpacing=0; UseIndividualColors=$false; ShowTime=$true; FontDay="Brush Script MT"; ColorAmPm="#FFFFFF"; DateAllCaps=$false; DayBold=$true; Quote2AllCaps=$false; AmPmSpacing=-3; FontDate="Segoe UI"; SizeDate=20; PositionMode="Centered"; StartupMethod="Disabled"; TimeAllCaps=$false; IncludeTaskbarInCenter=$false; ClockColor="#FFFFFF"; AmPmOffsetY=249; ShowQuote2=$false; ColorTime="#FFFFFF"; Quote2Text="Make it count."; ColorDate="#FFFFFF"; FontAmPm="Impact"; ColorQuote2="#FFFFFF"; AlwaysOnTop=$false; SizeAmPm=96; SizeQuote1=18; LockPosition=$false; LimitSpacing=50; UseAmPm=$true; BackgroundColor="#FFFFFF"; DateDaySameLine=$false; Quote1Text="Stay Focused"; DateDaySpacing=10; ShowQuote1=$false }
+$preset3 = @{ ShowTime=$true; ShowDate=$true; ShowDay=$true; ClockColor="#FFFFFF"; FontTime="Segoe UI Light"; SizeTime=72; TimeBold=$false; TimeItalic=$false; ShowSeconds=$false; UseAmPm=$true; ShowAmPm=$true; FontAmPm="Segoe UI Light"; SizeAmPm=24; AmPmOffsetY=15; AmPmSpacing=8; AmPmAllCaps=$true; FontDate="Segoe UI Semilight"; SizeDate=22; DateAllCaps=$false; FontDay="Segoe UI Semibold"; SizeDay=24; DayAllCaps=$true; DateDaySameLine=$true; DateDaySpacing=15; LineSpacing=5; Alignment="Center"; PositionMode="Centered"; ShadowEnabled=$true; TextOpacity=90; ShowBackground=$false; Quote1Text="Stay Focused"; ShowQuote1=$false; FontQuote1="Segoe UI"; DateAboveTime=$false; Quote1Italic=$true; Quote2Bold=$false; SizeQuote1=18; FontQuote2="Segoe UI"; DateItalic=$false; Quote1Bold=$false; ColorDay="#FFFFFF"; DayItalic=$false; Quote2Italic=$false; Quote1AllCaps=$false; AmPmItalic=$false; SizeQuote2=14; LimitOffset=200; DateBold=$false; ColorDate="#FFFFFF"; QuoteSpacing=10; StartupMethod="Disabled"; ColorQuote1="#FFFFFF"; Quote2AllCaps=$false; UseIndividualColors=$false; ColorAmPm="#FFFFFF"; ShowQuote2=$false; DayBold=$false; BgOpacity=50; IncludeTaskbarInCenter=$false; ColorTime="#FFFFFF"; AmPmBold=$false; ColorQuote2="#FFFFFF"; AlwaysOnTop=$false; LockPosition=$false; LimitSpacing=50; BackgroundColor="#000000"; Quote2Text="Make it count." }
+
 Write-Host "[*] Terminating existing background processes..." -ForegroundColor DarkGray
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "Kloc.ps1" -or $_.Name -match "Kloc.exe" } | Invoke-CimMethod -MethodName Terminate | Out-Null
 
@@ -30,7 +47,6 @@ $commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
 
 Write-Host "[*] Cleaning up old application data..." -ForegroundColor DarkGray
 if (Test-Path $installDir) { Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue }
-
 $oldMenuDir = Join-Path $commonPrograms "Kloc"
 if (Test-Path $oldMenuDir) { Remove-Item -Path $oldMenuDir -Recurse -Force -ErrorAction SilentlyContinue }
 $mainShortcutPath = Join-Path $commonPrograms "Kloc.lnk"
@@ -45,44 +61,122 @@ Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Klo
 New-Item -Path $installDir -ItemType Directory -Force | Out-Null
 if (-not (Test-Path $appDataFolder)) { New-Item -Path $appDataFolder -ItemType Directory -Force | Out-Null }
 
-if ($null -ne $existingSettings) {
+if ($choice -eq "0" -and $null -ne $existingSettings) {
     Set-Content -Path $settingsFile -Value $existingSettings -Force
-    Write-Host "[*] Settings successfully migrated!" -ForegroundColor Green
+    Write-Host "[*] Existing settings seamlessly restored!" -ForegroundColor Green
+} else {
+    $sel = $preset1
+    if ($choice -eq "2") { $sel = $preset2 } elseif ($choice -eq "3") { $sel = $preset3 }
+    $sel | ConvertTo-Json -Depth 2 | Set-Content $settingsFile -Force
+    Write-Host "[*] Preset applied successfully!" -ForegroundColor Green
 }
 
-# --- 3. DYNAMICALLY GENERATE THE SVG-BASED .ICO NATIVELY ---
-Write-Host "[*] Compiling UI Assets & SVG Icon..." -ForegroundColor Cyan
-Add-Type -AssemblyName System.Drawing
-$bmp = New-Object System.Drawing.Bitmap(256, 256)
-$g = [System.Drawing.Graphics]::FromImage($bmp)
-$g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-$g.Clear([System.Drawing.Color]::Transparent)
+# --- 3. DYNAMICALLY GENERATE DUAL UI ASSETS (NO CLIPPING) ---
+Write-Host "[*] Rendering custom SVG UI Assets (High Fidelity)..." -ForegroundColor Cyan
+try {
+    Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase, System.Drawing
+    $svgXaml = @"
+    <Viewbox xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Width="256" Height="256">
+        <Canvas Width="32" Height="32">
+            <Path Fill="#2197F3" Data="M28,8v13c0,0.55-0.45,1-1,1H5c-0.55,0-1-0.45-1-1V8c0-1.65,1.35-3,3-3h18C26.65,5,28,6.35,28,8z"/>
+            <Path Fill="#FFFFFF" Data="M11.5,15c-0.2559,0-0.5117-0.0977-0.707-0.293c-0.3906-0.3906-0.3906-1.0234,0-1.4141l3-3 c0.3906-0.3906,1.0234-0.3906,1.4141,0s0.3906,1.0234,0,1.4141l-3,3C12.0117,14.9023,11.7559,15,11.5,15z"/>
+            <Path Fill="#FFFFFF" Data="M15.5,16c-0.2559,0-0.5117-0.0977-0.707-0.293c-0.3906-0.3906-0.3906-1.0234,0-1.4141l5-5 c0.3906-0.3906,1.0234-0.3906,1.4141,0s0.3906,1.0234,0,1.4141l-5,5C16.0117,15.9023,15.7559,16,15.5,16z"/>
+            <Path Fill="#3F51B5" Data="M31,23.5c0,1.93-1.57,3.5-3.5,3.5h-23C2.57,27,1,25.43,1,23.5S2.57,20,4.5,20h23 C29.43,20,31,21.57,31,23.5z"/>
+        </Canvas>
+    </Viewbox>
+"@
+    $stringReader = New-Object System.IO.StringReader($svgXaml)
+    $xmlReader = [System.Xml.XmlReader]::Create($stringReader)
+    $viewbox = [System.Windows.Markup.XamlReader]::Load($xmlReader)
+    $xmlReader.Close()
+    $stringReader.Dispose()
+    
+    # Render Master 256x256 image
+    $viewbox.Measure([System.Windows.Size]::new(256, 256))
+    $viewbox.Arrange([System.Windows.Rect]::new(0, 0, 256, 256))
+    $viewbox.UpdateLayout()
+    [System.Windows.Media.RenderOptions]::SetBitmapScalingMode($viewbox, [System.Windows.Media.BitmapScalingMode]::HighQuality)
 
-$g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#EFD9A0"))), 12, 12, 210, 210)
-$g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#98C4D8"))), 24, 24, 210, 210)
-$wPen = New-Object System.Drawing.Pen([System.Drawing.ColorTranslator]::FromHtml("#FEFEFE"), 18)
-$wPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round; $wPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-$g.DrawLine($wPen, 129, 129, 129, 65)
-$g.DrawLine($wPen, 129, 129, 185, 129)
+    $rtb = New-Object System.Windows.Media.Imaging.RenderTargetBitmap(256, 256, 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
+    $rtb.Render($viewbox)
+    $pngEncoder = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+    $pngEncoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($rtb))
+    $ms = New-Object System.IO.MemoryStream
+    $pngEncoder.Save($ms)
+    $pngBytes = $ms.ToArray()
+    
+    # Save 256x256 icon.ico
+    $icoStream = New-Object System.IO.FileStream("$installDir\icon.ico", [System.IO.FileMode]::Create)
+    $bw = New-Object System.IO.BinaryWriter($icoStream)
+    $bw.Write([int16]0); $bw.Write([int16]1); $bw.Write([int16]1); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([int16]1); $bw.Write([int16]32)
+    $bw.Write([int32]$pngBytes.Length); $bw.Write([int32]22); $bw.Write($pngBytes)
+    $bw.Flush(); $icoStream.Dispose()
+    
+    # Smooth Downscale to 64x64 for tray.ico using GDI+
+    $ms.Position = 0
+    $bmp256 = [System.Drawing.Bitmap]::FromStream($ms)
+    $bmp64 = New-Object System.Drawing.Bitmap(64, 64)
+    $g64 = [System.Drawing.Graphics]::FromImage($bmp64)
+    $g64.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $g64.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+    $g64.DrawImage($bmp256, 0, 0, 64, 64)
+    $g64.Dispose()
+    $bmp256.Dispose()
+    $ms.Dispose()
 
-$ms = New-Object System.IO.MemoryStream
-$bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-$pngBytes = $ms.ToArray()
-$icoStream = New-Object System.IO.FileStream("$installDir\icon.ico", [System.IO.FileMode]::Create)
-$bw = New-Object System.IO.BinaryWriter($icoStream)
-$bw.Write([int16]0); $bw.Write([int16]1); $bw.Write([int16]1); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([int16]1); $bw.Write([int16]32)
-$bw.Write([int32]$pngBytes.Length); $bw.Write([int32]22); $bw.Write($pngBytes)
-$bw.Flush(); $icoStream.Dispose(); $ms.Dispose(); $g.Dispose(); $bmp.Dispose()
+    $ms64 = New-Object System.IO.MemoryStream
+    $bmp64.Save($ms64, [System.Drawing.Imaging.ImageFormat]::Png)
+    $pngBytes64 = $ms64.ToArray()
+    $ms64.Dispose()
+    $bmp64.Dispose()
 
-# --- 4. BUILD THE TASK MANAGER EXECUTABLE & INVISIBLE LAUNCHER ---
-Write-Host "[*] Creating Native Background Wrapper & Silencer..." -ForegroundColor Cyan
+    $icoStream64 = New-Object System.IO.FileStream("$installDir\tray.ico", [System.IO.FileMode]::Create)
+    $bw64 = New-Object System.IO.BinaryWriter($icoStream64)
+    $bw64.Write([int16]0); $bw64.Write([int16]1); $bw64.Write([int16]1); $bw64.Write([byte]64); $bw64.Write([byte]64); $bw64.Write([byte]0); $bw64.Write([byte]0); $bw64.Write([int16]1); $bw64.Write([int16]32)
+    $bw64.Write([int32]$pngBytes64.Length); $bw64.Write([int32]22); $bw64.Write($pngBytes64)
+    $bw64.Flush(); $icoStream64.Dispose()
+
+} catch {
+    Write-Host "[!] Advanced SVG Rendering failed. Falling back to default app icon..." -ForegroundColor Yellow
+    Add-Type -AssemblyName System.Drawing
+    $bmp = New-Object System.Drawing.Bitmap(256, 256)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#2197F3"))), 12, 12, 232, 232)
+    $ms = New-Object System.IO.MemoryStream
+    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    $pngBytes = $ms.ToArray()
+    $icoStream = New-Object System.IO.FileStream("$installDir\icon.ico", [System.IO.FileMode]::Create)
+    $bw = New-Object System.IO.BinaryWriter($icoStream)
+    $bw.Write([int16]0); $bw.Write([int16]1); $bw.Write([int16]1); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([int16]1); $bw.Write([int16]32)
+    $bw.Write([int32]$pngBytes.Length); $bw.Write([int32]22); $bw.Write($pngBytes)
+    $bw.Flush(); $icoStream.Dispose(); $ms.Dispose(); $g.Dispose(); $bmp.Dispose()
+    
+    $bmp64 = New-Object System.Drawing.Bitmap(64, 64)
+    $g64 = [System.Drawing.Graphics]::FromImage($bmp64)
+    $g64.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g64.Clear([System.Drawing.Color]::Transparent)
+    $g64.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#2197F3"))), 3, 3, 58, 58)
+    $ms64 = New-Object System.IO.MemoryStream
+    $bmp64.Save($ms64, [System.Drawing.Imaging.ImageFormat]::Png)
+    $pngBytes64 = $ms64.ToArray()
+    $icoStream64 = New-Object System.IO.FileStream("$installDir\tray.ico", [System.IO.FileMode]::Create)
+    $bw64 = New-Object System.IO.BinaryWriter($icoStream64)
+    $bw64.Write([int16]0); $bw64.Write([int16]1); $bw64.Write([int16]1); $bw64.Write([byte]64); $bw64.Write([byte]64); $bw64.Write([byte]0); $bw64.Write([byte]0); $bw64.Write([int16]1); $bw64.Write([int16]32)
+    $bw64.Write([int32]$pngBytes64.Length); $bw64.Write([int32]22); $bw64.Write($pngBytes64)
+    $bw64.Flush(); $icoStream64.Dispose(); $ms64.Dispose(); $g64.Dispose(); $bmp64.Dispose()
+}
+
+# --- 4. BUILD THE TASK MANAGER EXECUTABLE & SILENT LAUNCHER ---
+Write-Host "[*] Creating Native Background Wrapper (Bypassing App Control)..." -ForegroundColor Cyan
 Copy-Item "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -Destination "$installDir\Kloc.exe" -Force
 
-$launcherVbs = @'
+$vbsPayload = @'
 Set ws = CreateObject("WScript.Shell")
 ws.Run """C:\Program Files\Detaroxz\Kloc\Kloc.exe"" -ExecutionPolicy Bypass -WindowStyle Hidden -File ""C:\Program Files\Detaroxz\Kloc\Kloc.ps1""", 0, False
 '@
-Set-Content -Path "$installDir\Invisible.vbs" -Value $launcherVbs -Encoding Ascii
+Set-Content -Path "$installDir\Invisible.vbs" -Value $vbsPayload -Encoding Ascii
 
 # --- 5. DEFINE THE MAIN CLOCK SCRIPT PAYLOAD ---
 Write-Host "[*] Writing Kloc Engine & Layout logic..." -ForegroundColor Cyan
@@ -414,6 +508,9 @@ $script:gcTimer.Add_Tick({
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(500)
 
+$script:isSettingsOpen = $false
+$script:isBoundToDesktop = $false
+
 $script:tickCounter = 0
 $script:TickAction = {
     $flagPath = "$env:APPDATA\Detaroxz\Kloc\open_settings.flag"
@@ -513,7 +610,6 @@ function Update-StartupManager {
     }
 }
 
-$script:isSettingsOpen = $false
 
 # --- Settings Window UI ---
 function Show-SettingsWindow {
@@ -525,7 +621,7 @@ function Show-SettingsWindow {
     $setXAML = @"
     <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-            Title="Kloc Settings (v1.0.3)" Width="600" Height="780" WindowStartupLocation="CenterScreen" Topmost="True" ResizeMode="NoResize" Background="#FAFAFA" FontFamily="Segoe UI">
+            Title="Kloc Settings (v1.0.0)" Width="600" Height="780" WindowStartupLocation="CenterScreen" Topmost="True" ResizeMode="NoResize" Background="#FAFAFA" FontFamily="Segoe UI">
         <Grid Margin="5">
             <TabControl Background="#FFFFFF" BorderBrush="#DDDDDD" BorderThickness="1" Margin="5">
                 <TabControl.Resources>
@@ -807,7 +903,7 @@ function Show-SettingsWindow {
                 <TabItem Header="About" FontSize="14" Padding="15,5">
                     <StackPanel Margin="10,15,10,10" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock Text="Kloc Desktop Clock" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,30,0,5"/>
-                        <TextBlock Text="v1.0.3 by Detaroxz" FontSize="14" HorizontalAlignment="Center" Margin="0,0,0,30"/>
+                        <TextBlock Text="v1.0.0 by Detaroxz" FontSize="14" HorizontalAlignment="Center" Margin="0,0,0,30"/>
                         
                         <Button Name="btnRepo" Content="Project Repo (GitHub)" Padding="10,8" Margin="0,5" Width="260" Cursor="Hand" Background="#E5E5E5" BorderThickness="0"/>
                         <Button Name="btnWeb" Content="Developer Website" Padding="10,8" Margin="0,5" Width="260" Cursor="Hand" Background="#E5E5E5" BorderThickness="0"/>
@@ -1005,12 +1101,19 @@ function Show-SettingsWindow {
         
         if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
             if ($global:Settings.AlwaysOnTop) {
-                [Win32]::UnbindFromDesktop($script:clockHwnd)
+                if ($script:isBoundToDesktop) {
+                    [Win32]::UnbindFromDesktop($script:clockHwnd)
+                    $script:isBoundToDesktop = $false
+                }
                 $window.Topmost = $true
             } else {
                 $window.Topmost = $false
-                [Win32]::BindToDesktop($script:clockHwnd)
+                if (-not $script:isBoundToDesktop) {
+                    [Win32]::BindToDesktop($script:clockHwnd)
+                    $script:isBoundToDesktop = $true
+                }
             }
+            [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
         }
         [Win32]::TrimMemory()
     }
@@ -1176,8 +1279,13 @@ $window.Add_Loaded({
 
     Apply-Layout
     
-    if (-not $global:Settings.AlwaysOnTop) {
+    if ($global:Settings.AlwaysOnTop) {
+        $window.Topmost = $true
+        $script:isBoundToDesktop = $false
+    } else {
+        $window.Topmost = $false
         [Win32]::BindToDesktop($script:clockHwnd)
+        $script:isBoundToDesktop = $true
     }
     
     $window.Opacity = 1
@@ -1185,7 +1293,7 @@ $window.Add_Loaded({
 })
 
 $sysTray = New-Object System.Windows.Forms.NotifyIcon
-$sysTray.Icon = New-Object System.Drawing.Icon("C:\Program Files\Detaroxz\Kloc\icon.ico")
+$sysTray.Icon = New-Object System.Drawing.Icon("C:\Program Files\Detaroxz\Kloc\tray.ico")
 $sysTray.Text = "Kloc Desktop Clock"
 $sysTray.Visible = $true
 $contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
@@ -1203,7 +1311,7 @@ Set-Content -Path "$installDir\Kloc.ps1" -Value $klocContent -Encoding UTF8
 
 $uninstallContent = @'
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs; Exit }
-Write-Host "Uninstalling Kloc v1.0.3..." -ForegroundColor Cyan
+Write-Host "Uninstalling Kloc v1.0.0..." -ForegroundColor Cyan
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "Kloc.ps1" -or $_.Name -match "Kloc.exe" } | Invoke-CimMethod -MethodName Terminate | Out-Null
 $installDir = "C:\Program Files\Detaroxz\Kloc"; $appDataDir = "$env:APPDATA\Detaroxz\Kloc"; $commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
 if (Test-Path $installDir) { Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue }
@@ -1224,21 +1332,21 @@ Set-Content -Path "$installDir\Uninstall.ps1" -Value $uninstallContent -Encoding
 $WshShell = New-Object -ComObject WScript.Shell
 $mainShortcutPath = Join-Path $commonPrograms "Kloc.lnk"
 $shortcutStart = $WshShell.CreateShortcut($mainShortcutPath)
-$shortcutStart.TargetPath = "C:\Program Files\Detaroxz\Kloc\Kloc.exe"
-$shortcutStart.Arguments = "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"C:\Program Files\Detaroxz\Kloc\Kloc.ps1`""
+$shortcutStart.TargetPath = "wscript.exe"
+$shortcutStart.Arguments = "`"C:\Program Files\Detaroxz\Kloc\Invisible.vbs`""
 $shortcutStart.IconLocation = "C:\Program Files\Detaroxz\Kloc\icon.ico"
 $shortcutStart.Save()
 
 # --- 7. REGISTRY & LAUNCH ---
 $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Kloc"
 if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
-Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "Kloc Desktop Clock"; Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "1.0.3"; Set-ItemProperty -Path $regPath -Name "Publisher" -Value "Detaroxz"
+Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "Kloc Desktop Clock"; Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "1.0.0"; Set-ItemProperty -Path $regPath -Name "Publisher" -Value "Detaroxz"
 Set-ItemProperty -Path $regPath -Name "DisplayIcon" -Value "C:\Program Files\Detaroxz\Kloc\icon.ico"
 Set-ItemProperty -Path $regPath -Name "UninstallString" -Value "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$installDir\Uninstall.ps1`""
 Set-ItemProperty -Path $regPath -Name "NoModify" -Value 1; Set-ItemProperty -Path $regPath -Name "NoRepair" -Value 1
 
 Write-Host "=================================================" -ForegroundColor Cyan
-Write-Host " Installation Complete! Launching Kloc v1.0.3... " -ForegroundColor Green
+Write-Host " Installation Complete! Launching Kloc v1.0.0... " -ForegroundColor Green
 Write-Host "=================================================" -ForegroundColor Cyan
-Start-Process -FilePath "$installDir\Kloc.exe" -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$installDir\Kloc.ps1`"" -WindowStyle Hidden
+Start-Process -FilePath "wscript.exe" -ArgumentList "`"$installDir\Invisible.vbs`"" -WindowStyle Hidden
 Start-Sleep -Seconds 2
