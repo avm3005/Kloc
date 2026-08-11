@@ -248,8 +248,10 @@ public class Win32 {
 
     public static void BindToDesktop(IntPtr hwnd) {
         IntPtr progman = FindWindow("Progman", null);
-        IntPtr workerw = IntPtr.Zero;
+        IntPtr result;
+        SendMessageTimeout(progman, 0x052C, IntPtr.Zero, IntPtr.Zero, 0, 1000, out result);
         
+        IntPtr workerw = IntPtr.Zero;
         EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) => {
             IntPtr p = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
             if (p != IntPtr.Zero) {
@@ -257,18 +259,6 @@ public class Win32 {
             }
             return true;
         }), IntPtr.Zero);
-        
-        if (workerw == IntPtr.Zero) {
-            IntPtr result;
-            SendMessageTimeout(progman, 0x052C, IntPtr.Zero, IntPtr.Zero, 0, 1000, out result);
-            EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) => {
-                IntPtr p = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
-                if (p != IntPtr.Zero) {
-                    workerw = FindWindowEx(IntPtr.Zero, tophandle, "WorkerW", null);
-                }
-                return true;
-            }), IntPtr.Zero);
-        }
         
         if (workerw == IntPtr.Zero) { workerw = progman; }
         
@@ -332,10 +322,11 @@ function Load-Settings {
 function Save-Settings ($SettingsObj) { $SettingsObj | ConvertTo-Json -Depth 2 | Set-Content $settingsFile -Force }
 $global:Settings = Load-Settings
 
+# MinWidth and MinHeight completely prevent the 0x0 WPF auto-detach bug
 $clockXAML = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         Title="Kloc" Background="Transparent" AllowsTransparency="True" WindowStyle="None" 
-        SizeToContent="WidthAndHeight" ShowInTaskbar="False" Opacity="0">
+        SizeToContent="WidthAndHeight" ShowInTaskbar="False" Opacity="0" MinWidth="1" MinHeight="1">
     <Grid Name="RootGrid" Background="Transparent">
         <StackPanel Name="MainPanel" Margin="15" Background="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center">
             <StackPanel Name="TimePanel" Orientation="Horizontal" Background="Transparent" VerticalAlignment="Center">
@@ -519,6 +510,7 @@ $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(500)
 
 $script:isSettingsOpen = $false
+$script:isBoundToDesktop = $false
 
 $script:tickCounter = 0
 $script:TickAction = {
@@ -572,18 +564,106 @@ $script:TickAction = {
         $timer.Start()
     }
 
+    # Deep memory trim perfectly tuned to fire every 5 idle minutes (600 ticks)
     if ($timer.Interval.TotalMinutes -eq 15 -and $timer.IsEnabled) {
         $script:gcTimer.Start()
     } elseif ($timer.IsEnabled) {
         $script:tickCounter++
-        if ($script:tickCounter -ge 60) {
+        if ($script:tickCounter -ge 600) {
             $script:tickCounter = 0
             [Win32]::TrimMemory()
         }
     }
+    
+    if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
+        [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
+    }
 }
 
 $timer.Add_Tick({ &$script:TickAction })
+
+# Deferred Save & Apply Logic (Cures all settings lag)
+$script:UpdateState = {
+    $global:Settings.ShowTime = ($setWindow.FindName("chkTime").IsChecked -eq $true)
+    $global:Settings.TimeAllCaps = ($setWindow.FindName("chkCapsTime").IsChecked -eq $true)
+    $global:Settings.FontTime = $setWindow.FindName("lblFontTime").Tag.Name; $global:Settings.SizeTime = $setWindow.FindName("lblFontTime").Tag.Size; $global:Settings.TimeBold = $setWindow.FindName("lblFontTime").Tag.Bold; $global:Settings.TimeItalic = $setWindow.FindName("lblFontTime").Tag.Italic
+    
+    $global:Settings.ShowAmPm = ($setWindow.FindName("chkAmPmShow").IsChecked -eq $true)
+    $global:Settings.AmPmAllCaps = ($setWindow.FindName("chkCapsAmPm").IsChecked -eq $true)
+    $global:Settings.FontAmPm = $setWindow.FindName("lblFontAmPm").Tag.Name; $global:Settings.SizeAmPm = $setWindow.FindName("lblFontAmPm").Tag.Size; $global:Settings.AmPmBold = $setWindow.FindName("lblFontAmPm").Tag.Bold; $global:Settings.AmPmItalic = $setWindow.FindName("lblFontAmPm").Tag.Italic
+    
+    $global:Settings.ShowDate = ($setWindow.FindName("chkDate").IsChecked -eq $true)
+    $global:Settings.DateAllCaps = ($setWindow.FindName("chkCapsDate").IsChecked -eq $true)
+    $global:Settings.FontDate = $setWindow.FindName("lblFontDate").Tag.Name; $global:Settings.SizeDate = $setWindow.FindName("lblFontDate").Tag.Size; $global:Settings.DateBold = $setWindow.FindName("lblFontDate").Tag.Bold; $global:Settings.DateItalic = $setWindow.FindName("lblFontDate").Tag.Italic
+    
+    $global:Settings.ShowDay = ($setWindow.FindName("chkDay").IsChecked -eq $true)
+    $global:Settings.DayAllCaps = ($setWindow.FindName("chkCapsDay").IsChecked -eq $true)
+    $global:Settings.FontDay = $setWindow.FindName("lblFontDay").Tag.Name; $global:Settings.SizeDay = $setWindow.FindName("lblFontDay").Tag.Size; $global:Settings.DayBold = $setWindow.FindName("lblFontDay").Tag.Bold; $global:Settings.DayItalic = $setWindow.FindName("lblFontDay").Tag.Italic
+    
+    $global:Settings.ShowQuote1 = ($setWindow.FindName("chkShowQuote1").IsChecked -eq $true)
+    $global:Settings.Quote1AllCaps = ($setWindow.FindName("chkCapsQuote1").IsChecked -eq $true)
+    $global:Settings.FontQuote1 = $setWindow.FindName("lblFontQuote1").Tag.Name; $global:Settings.SizeQuote1 = $setWindow.FindName("lblFontQuote1").Tag.Size; $global:Settings.Quote1Bold = $setWindow.FindName("lblFontQuote1").Tag.Bold; $global:Settings.Quote1Italic = $setWindow.FindName("lblFontQuote1").Tag.Italic
+    
+    $global:Settings.ShowQuote2 = ($setWindow.FindName("chkShowQuote2").IsChecked -eq $true)
+    $global:Settings.Quote2AllCaps = ($setWindow.FindName("chkCapsQuote2").IsChecked -eq $true)
+    $global:Settings.FontQuote2 = $setWindow.FindName("lblFontQuote2").Tag.Name; $global:Settings.SizeQuote2 = $setWindow.FindName("lblFontQuote2").Tag.Size; $global:Settings.Quote2Bold = $setWindow.FindName("lblFontQuote2").Tag.Bold; $global:Settings.Quote2Italic = $setWindow.FindName("lblFontQuote2").Tag.Italic
+
+    $global:Settings.UseIndividualColors = ($setWindow.FindName("chkIndividualColors").IsChecked -eq $true)
+    $global:Settings.ShadowEnabled = ($setWindow.FindName("chkShadow").IsChecked -eq $true)
+    $global:Settings.ShowBackground = ($setWindow.FindName("chkShowBg").IsChecked -eq $true)
+    $global:Settings.UseAmPm = ($setWindow.FindName("chkAmPm").IsChecked -eq $true)
+    $global:Settings.ShowSeconds = ($setWindow.FindName("chkSeconds").IsChecked -eq $true)
+    
+    $global:Settings.PositionMode = if ($setWindow.FindName("cmbPositionMode").SelectedIndex -eq 1) { "Centered" } else { "Fixed" }
+    $global:Settings.AlwaysOnTop = if ($setWindow.FindName("cmbMode").SelectedIndex -eq 1) { $true } else { $false }
+    $global:Settings.Alignment = $setWindow.FindName("cmbAlign").Text
+    $global:Settings.LockPosition = ($setWindow.FindName("chkLock").IsChecked -eq $true)
+    $global:Settings.IncludeTaskbarInCenter = ($setWindow.FindName("chkIncludeTaskbar").IsChecked -eq $true)
+    $global:Settings.DateDaySameLine = ($setWindow.FindName("chkSameLine").IsChecked -eq $true)
+    $global:Settings.DateAboveTime = ($setWindow.FindName("chkDateAbove").IsChecked -eq $true)
+    $global:Settings.StartupMethod = $setWindow.FindName("cmbStartup").Text
+
+    # Update Dynamic Visibilities
+    $timeIsOn = $global:Settings.ShowTime
+    $setWindow.FindName("chkAmPm").IsEnabled = $timeIsOn
+    $setWindow.FindName("chkSeconds").IsEnabled = $timeIsOn
+    $amPmEnabled = ($global:Settings.UseAmPm -and $timeIsOn)
+    $setWindow.FindName("chkAmPmShow").IsEnabled = $amPmEnabled
+    $setWindow.FindName("btnFontAmPm").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
+    $setWindow.FindName("chkCapsAmPm").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
+    $setWindow.FindName("sldAmPmOffsetY").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
+    $setWindow.FindName("sldAmPmSpacing").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
+    $setWindow.FindName("lblFontAmPm").Opacity = if($amPmEnabled -and $global:Settings.ShowAmPm){1}else{0.5}
+
+    $setWindow.FindName("btnFontTime").IsEnabled = $timeIsOn; $setWindow.FindName("chkCapsTime").IsEnabled = $timeIsOn; $setWindow.FindName("lblFontTime").Opacity = if($timeIsOn){1}else{0.5}
+    $setWindow.FindName("btnFontDate").IsEnabled = $global:Settings.ShowDate; $setWindow.FindName("chkCapsDate").IsEnabled = $global:Settings.ShowDate; $setWindow.FindName("lblFontDate").Opacity = if($global:Settings.ShowDate){1}else{0.5}
+    $setWindow.FindName("btnFontDay").IsEnabled = $global:Settings.ShowDay; $setWindow.FindName("chkCapsDay").IsEnabled = $global:Settings.ShowDay; $setWindow.FindName("lblFontDay").Opacity = if($global:Settings.ShowDay){1}else{0.5}
+    
+    $setWindow.FindName("txtQuote1").IsEnabled = $global:Settings.ShowQuote1; $setWindow.FindName("btnFontQuote1").IsEnabled = $global:Settings.ShowQuote1; $setWindow.FindName("chkCapsQuote1").IsEnabled = $global:Settings.ShowQuote1; $setWindow.FindName("lblFontQuote1").Opacity = if($global:Settings.ShowQuote1){1}else{0.5}
+    $setWindow.FindName("txtQuote2").IsEnabled = $global:Settings.ShowQuote2; $setWindow.FindName("btnFontQuote2").IsEnabled = $global:Settings.ShowQuote2; $setWindow.FindName("chkCapsQuote2").IsEnabled = $global:Settings.ShowQuote2; $setWindow.FindName("lblFontQuote2").Opacity = if($global:Settings.ShowQuote2){1}else{0.5}
+
+    $setWindow.FindName("panelIndividualColors").Visibility = if ($global:Settings.UseIndividualColors) { 'Visible' } else { 'Collapsed' }
+    $setWindow.FindName("panelGlobalColor").Visibility = if ($global:Settings.UseIndividualColors) { 'Collapsed' } else { 'Visible' }
+
+    $setWindow.FindName("btnBgColor").IsEnabled = $global:Settings.ShowBackground; $setWindow.FindName("sldBgOpacity").IsEnabled = $global:Settings.ShowBackground
+    $setWindow.FindName("lblBgTitle").Opacity = if($global:Settings.ShowBackground){1}else{0.5}; $setWindow.FindName("lblOpacityTitle").Opacity = if($global:Settings.ShowBackground){1}else{0.5}
+    $setWindow.FindName("chkLock").IsEnabled = ($global:Settings.PositionMode -eq "Fixed"); $setWindow.FindName("chkIncludeTaskbar").IsEnabled = ($global:Settings.PositionMode -eq "Centered")
+
+    Apply-Layout
+    &$script:TickAction
+    
+    # Aggressively enforce binding to prevent Win+D breaks when turning off all elements (0x0 window bounds)
+    if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
+        if ($global:Settings.AlwaysOnTop) {
+            $window.Topmost = $true
+            if ($script:isBoundToDesktop) { [Win32]::UnbindFromDesktop($script:clockHwnd); $script:isBoundToDesktop = $false }
+        } else {
+            $window.Topmost = $false
+            [Win32]::BindToDesktop($script:clockHwnd)
+            $script:isBoundToDesktop = $true
+        }
+    }
+}
 
 function Update-StartupManager {
     $startupFolder = [Environment]::GetFolderPath('Startup')
@@ -1026,96 +1106,30 @@ function Show-SettingsWindow {
         $setWindow.FindName("chkLock").IsEnabled = ($global:Settings.PositionMode -eq "Fixed"); $setWindow.FindName("chkIncludeTaskbar").IsEnabled = ($global:Settings.PositionMode -eq "Centered")
     }
 
-    $script:UpdateState = {
-        $global:Settings.ShowTime = ($setWindow.FindName("chkTime").IsChecked -eq $true)
-        $global:Settings.TimeAllCaps = ($setWindow.FindName("chkCapsTime").IsChecked -eq $true)
-        $global:Settings.FontTime = $setWindow.FindName("lblFontTime").Tag.Name; $global:Settings.SizeTime = $setWindow.FindName("lblFontTime").Tag.Size; $global:Settings.TimeBold = $setWindow.FindName("lblFontTime").Tag.Bold; $global:Settings.TimeItalic = $setWindow.FindName("lblFontTime").Tag.Italic
-        
-        $global:Settings.ShowAmPm = ($setWindow.FindName("chkAmPmShow").IsChecked -eq $true)
-        $global:Settings.AmPmAllCaps = ($setWindow.FindName("chkCapsAmPm").IsChecked -eq $true)
-        $global:Settings.FontAmPm = $setWindow.FindName("lblFontAmPm").Tag.Name; $global:Settings.SizeAmPm = $setWindow.FindName("lblFontAmPm").Tag.Size; $global:Settings.AmPmBold = $setWindow.FindName("lblFontAmPm").Tag.Bold; $global:Settings.AmPmItalic = $setWindow.FindName("lblFontAmPm").Tag.Italic
-        $global:Settings.AmPmOffsetY = [int]$setWindow.FindName("sldAmPmOffsetY").Value
-        $global:Settings.AmPmSpacing = [int]$setWindow.FindName("sldAmPmSpacing").Value
-
-        $global:Settings.ShowDate = ($setWindow.FindName("chkDate").IsChecked -eq $true)
-        $global:Settings.DateAllCaps = ($setWindow.FindName("chkCapsDate").IsChecked -eq $true)
-        $global:Settings.FontDate = $setWindow.FindName("lblFontDate").Tag.Name; $global:Settings.SizeDate = $setWindow.FindName("lblFontDate").Tag.Size; $global:Settings.DateBold = $setWindow.FindName("lblFontDate").Tag.Bold; $global:Settings.DateItalic = $setWindow.FindName("lblFontDate").Tag.Italic
-        
-        $global:Settings.ShowDay = ($setWindow.FindName("chkDay").IsChecked -eq $true)
-        $global:Settings.DayAllCaps = ($setWindow.FindName("chkCapsDay").IsChecked -eq $true)
-        $global:Settings.FontDay = $setWindow.FindName("lblFontDay").Tag.Name; $global:Settings.SizeDay = $setWindow.FindName("lblFontDay").Tag.Size; $global:Settings.DayBold = $setWindow.FindName("lblFontDay").Tag.Bold; $global:Settings.DayItalic = $setWindow.FindName("lblFontDay").Tag.Italic
-        
-        $global:Settings.ShowQuote1 = ($setWindow.FindName("chkShowQuote1").IsChecked -eq $true)
-        $global:Settings.Quote1Text = $setWindow.FindName("txtQuote1").Text
-        $global:Settings.Quote1AllCaps = ($setWindow.FindName("chkCapsQuote1").IsChecked -eq $true)
-        $global:Settings.FontQuote1 = $setWindow.FindName("lblFontQuote1").Tag.Name; $global:Settings.SizeQuote1 = $setWindow.FindName("lblFontQuote1").Tag.Size; $global:Settings.Quote1Bold = $setWindow.FindName("lblFontQuote1").Tag.Bold; $global:Settings.Quote1Italic = $setWindow.FindName("lblFontQuote1").Tag.Italic
-        
-        $global:Settings.ShowQuote2 = ($setWindow.FindName("chkShowQuote2").IsChecked -eq $true)
-        $global:Settings.Quote2Text = $setWindow.FindName("txtQuote2").Text
-        $global:Settings.Quote2AllCaps = ($setWindow.FindName("chkCapsQuote2").IsChecked -eq $true)
-        $global:Settings.FontQuote2 = $setWindow.FindName("lblFontQuote2").Tag.Name; $global:Settings.SizeQuote2 = $setWindow.FindName("lblFontQuote2").Tag.Size; $global:Settings.Quote2Bold = $setWindow.FindName("lblFontQuote2").Tag.Bold; $global:Settings.Quote2Italic = $setWindow.FindName("lblFontQuote2").Tag.Italic
-
-        $global:Settings.TextOpacity = [int]$setWindow.FindName("sldTextOpacity").Value
-        $global:Settings.UseIndividualColors = ($setWindow.FindName("chkIndividualColors").IsChecked -eq $true)
-        $global:Settings.ClockColor = $setWindow.FindName("lblClockColor").Text
-        $global:Settings.ColorTime = $setWindow.FindName("lblColorTime").Text
-        $global:Settings.ColorAmPm = $setWindow.FindName("lblColorAmPm").Text
-        $global:Settings.ColorDate = $setWindow.FindName("lblColorDate").Text
-        $global:Settings.ColorDay = $setWindow.FindName("lblColorDay").Text
-        $global:Settings.ColorQuote1 = $setWindow.FindName("lblColorQuote1").Text
-        $global:Settings.ColorQuote2 = $setWindow.FindName("lblColorQuote2").Text
-
-        $global:Settings.ShadowEnabled = ($setWindow.FindName("chkShadow").IsChecked -eq $true)
-        $global:Settings.ShowBackground = ($setWindow.FindName("chkShowBg").IsChecked -eq $true)
-        $global:Settings.BackgroundColor = $setWindow.FindName("lblBgColor").Text; $global:Settings.BgOpacity = [int]$setWindow.FindName("sldBgOpacity").Value
-        $global:Settings.UseAmPm = ($setWindow.FindName("chkAmPm").IsChecked -eq $true); $global:Settings.ShowSeconds = ($setWindow.FindName("chkSeconds").IsChecked -eq $true)
-        $global:Settings.PositionMode = if ($setWindow.FindName("cmbPositionMode").SelectedIndex -eq 1) { "Centered" } else { "Fixed" }
-        $global:Settings.AlwaysOnTop = if ($setWindow.FindName("cmbMode").SelectedIndex -eq 1) { $true } else { $false }
-        $global:Settings.Alignment = $setWindow.FindName("cmbAlign").Text; $global:Settings.LockPosition = ($setWindow.FindName("chkLock").IsChecked -eq $true)
-        $global:Settings.IncludeTaskbarInCenter = ($setWindow.FindName("chkIncludeTaskbar").IsChecked -eq $true); $global:Settings.DateDaySameLine = ($setWindow.FindName("chkSameLine").IsChecked -eq $true)
-        $global:Settings.DateAboveTime = ($setWindow.FindName("chkDateAbove").IsChecked -eq $true); $global:Settings.StartupMethod = $setWindow.FindName("cmbStartup").Text
-
-        # Update Visuals inside Settings Window Dynamically
-        $timeIsOn = $global:Settings.ShowTime
-        $setWindow.FindName("chkAmPm").IsEnabled = $timeIsOn
-        $setWindow.FindName("chkSeconds").IsEnabled = $timeIsOn
-        $amPmEnabled = ($global:Settings.UseAmPm -and $timeIsOn)
-        $setWindow.FindName("chkAmPmShow").IsEnabled = $amPmEnabled
-        $setWindow.FindName("btnFontAmPm").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm); $setWindow.FindName("chkCapsAmPm").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
-        $setWindow.FindName("sldAmPmOffsetY").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm); $setWindow.FindName("sldAmPmSpacing").IsEnabled = ($amPmEnabled -and $global:Settings.ShowAmPm)
-        $setWindow.FindName("lblFontAmPm").Opacity = if($amPmEnabled -and $global:Settings.ShowAmPm){1}else{0.5}
-
-        $setWindow.FindName("btnFontTime").IsEnabled = $timeIsOn; $setWindow.FindName("chkCapsTime").IsEnabled = $timeIsOn; $setWindow.FindName("lblFontTime").Opacity = if($timeIsOn){1}else{0.5}
-        $setWindow.FindName("btnFontDate").IsEnabled = $global:Settings.ShowDate; $setWindow.FindName("chkCapsDate").IsEnabled = $global:Settings.ShowDate; $setWindow.FindName("lblFontDate").Opacity = if($global:Settings.ShowDate){1}else{0.5}
-        $setWindow.FindName("btnFontDay").IsEnabled = $global:Settings.ShowDay; $setWindow.FindName("chkCapsDay").IsEnabled = $global:Settings.ShowDay; $setWindow.FindName("lblFontDay").Opacity = if($global:Settings.ShowDay){1}else{0.5}
-        
-        $setWindow.FindName("txtQuote1").IsEnabled = $global:Settings.ShowQuote1; $setWindow.FindName("btnFontQuote1").IsEnabled = $global:Settings.ShowQuote1; $setWindow.FindName("chkCapsQuote1").IsEnabled = $global:Settings.ShowQuote1; $setWindow.FindName("lblFontQuote1").Opacity = if($global:Settings.ShowQuote1){1}else{0.5}
-        $setWindow.FindName("txtQuote2").IsEnabled = $global:Settings.ShowQuote2; $setWindow.FindName("btnFontQuote2").IsEnabled = $global:Settings.ShowQuote2; $setWindow.FindName("chkCapsQuote2").IsEnabled = $global:Settings.ShowQuote2; $setWindow.FindName("lblFontQuote2").Opacity = if($global:Settings.ShowQuote2){1}else{0.5}
-
-        $setWindow.FindName("panelIndividualColors").Visibility = if ($global:Settings.UseIndividualColors) { 'Visible' } else { 'Collapsed' }
-        $setWindow.FindName("panelGlobalColor").Visibility = if ($global:Settings.UseIndividualColors) { 'Collapsed' } else { 'Visible' }
-
-        $setWindow.FindName("btnBgColor").IsEnabled = $global:Settings.ShowBackground; $setWindow.FindName("sldBgOpacity").IsEnabled = $global:Settings.ShowBackground
-        $setWindow.FindName("lblBgTitle").Opacity = if($global:Settings.ShowBackground){1}else{0.5}; $setWindow.FindName("lblOpacityTitle").Opacity = if($global:Settings.ShowBackground){1}else{0.5}
-        $setWindow.FindName("chkLock").IsEnabled = ($global:Settings.PositionMode -eq "Fixed"); $setWindow.FindName("chkIncludeTaskbar").IsEnabled = ($global:Settings.PositionMode -eq "Centered")
-
+    $setWindow.Add_Closed({ 
+        $script:isSettingsOpen = $false
         Save-Settings $global:Settings
         Update-StartupManager
-        Apply-Layout
-        &$script:TickAction
         
         if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
             if ($global:Settings.AlwaysOnTop) {
-                [Win32]::UnbindFromDesktop($script:clockHwnd)
                 $window.Topmost = $true
+                if ($script:isBoundToDesktop) {
+                    [Win32]::UnbindFromDesktop($script:clockHwnd)
+                    $script:isBoundToDesktop = $false
+                }
             } else {
                 $window.Topmost = $false
-                [Win32]::BindToDesktop($script:clockHwnd)
+                if (-not $script:isBoundToDesktop) {
+                    [Win32]::BindToDesktop($script:clockHwnd)
+                    $script:isBoundToDesktop = $true
+                }
             }
             [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
         }
-        [Win32]::TrimMemory()
-    }
+        
+        [Win32]::TrimMemory() 
+    })
 
     function Prompt-Font($currentTag) {
         $dlg = New-Object System.Windows.Forms.FontDialog; $dlg.ShowEffects = $false
@@ -1221,10 +1235,10 @@ function Show-SettingsWindow {
     $setWindow.FindName("cmbStartup").Add_DropDownClosed({ &$script:UpdateState })
 
     # --- SLIDERS ---
-    $sldOp = $setWindow.FindName("sldTextOpacity"); $sldOp.Add_ValueChanged({ $setWindow.FindName("lblTextOpacity").Text = "$($sldOp.Value)%" }); $sldOp.Add_PreviewMouseLeftButtonUp({ &$script:UpdateState }); $sldOp.Add_KeyUp({ &$script:UpdateState })
-    $sldBgOp = $setWindow.FindName("sldBgOpacity"); $sldBgOp.Add_ValueChanged({ $setWindow.FindName("lblBgOpacity").Text = "$($sldBgOp.Value)%" }); $sldBgOp.Add_PreviewMouseLeftButtonUp({ &$script:UpdateState }); $sldBgOp.Add_KeyUp({ &$script:UpdateState })
-    $sldAmPmSpace = $setWindow.FindName("sldAmPmSpacing"); $sldAmPmSpace.Add_ValueChanged({ $setWindow.FindName("lblAmPmSpacing").Text = "$($sldAmPmSpace.Value)" }); $sldAmPmSpace.Add_PreviewMouseLeftButtonUp({ &$script:UpdateState }); $sldAmPmSpace.Add_KeyUp({ &$script:UpdateState })
-    $sldAmPmOffset = $setWindow.FindName("sldAmPmOffsetY"); $sldAmPmOffset.Add_ValueChanged({ $setWindow.FindName("lblAmPmOffsetY").Text = "$($sldAmPmOffset.Value)" }); $sldAmPmOffset.Add_PreviewMouseLeftButtonUp({ &$script:UpdateState }); $sldAmPmOffset.Add_KeyUp({ &$script:UpdateState })
+    $sldOp = $setWindow.FindName("sldTextOpacity"); $sldOp.Add_ValueChanged({ $setWindow.FindName("lblTextOpacity").Text = "$($this.Value)%"; &$script:UpdateState })
+    $sldBgOp = $setWindow.FindName("sldBgOpacity"); $sldBgOp.Add_ValueChanged({ $setWindow.FindName("lblBgOpacity").Text = "$($this.Value)%"; &$script:UpdateState })
+    $sldAmPmSpace = $setWindow.FindName("sldAmPmSpacing"); $sldAmPmSpace.Add_ValueChanged({ $setWindow.FindName("lblAmPmSpacing").Text = "$($this.Value)"; &$script:UpdateState })
+    $sldAmPmOffset = $setWindow.FindName("sldAmPmOffsetY"); $sldAmPmOffset.Add_ValueChanged({ $setWindow.FindName("lblAmPmOffsetY").Text = "$($this.Value)"; &$script:UpdateState })
 
     # --- FONT BUTTONS ---
     $setWindow.FindName("btnFontTime").Add_Click({ Update-FontLabel $setWindow.FindName("lblFontTime") (Prompt-Font $setWindow.FindName("lblFontTime").Tag); &$script:UpdateState })
@@ -1250,7 +1264,6 @@ function Show-SettingsWindow {
     $setWindow.FindName("btnDarkSwitch").Add_Click({ Start-Process "https://github.com/avm3005/DarkSwitch" })
     $setWindow.FindName("btnSortFE").Add_Click({ Start-Process "https://github.com/avm3005/SortFE" })
 
-    $setWindow.Add_Closed({ $script:isSettingsOpen = $false; [Win32]::TrimMemory() })
     $setWindow.ShowDialog() | Out-Null
 }
 
@@ -1278,10 +1291,13 @@ $window.Add_Loaded({
 
     Apply-Layout
     
-    if (-not $global:Settings.AlwaysOnTop) {
-        [Win32]::BindToDesktop($script:clockHwnd)
-    } else {
+    if ($global:Settings.AlwaysOnTop) {
         $window.Topmost = $true
+        $script:isBoundToDesktop = $false
+    } else {
+        $window.Topmost = $false
+        [Win32]::BindToDesktop($script:clockHwnd)
+        $script:isBoundToDesktop = $true
     }
     
     $window.Opacity = 1
@@ -1306,12 +1322,22 @@ $app.Run($window) | Out-Null
 Set-Content -Path "$installDir\Kloc.ps1" -Value $klocContent -Encoding UTF8
 
 $uninstallContent = @'
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs; Exit }
-Write-Host "Uninstalling Kloc v1.0.0..." -ForegroundColor Cyan
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs; Exit }
+
+Add-Type -AssemblyName System.Windows.Forms
+
+$appDataDir = "$env:APPDATA\Detaroxz\Kloc"
+$keepData = $true
+if (Test-Path $appDataDir) {
+    $ans = [System.Windows.Forms.MessageBox]::Show("Do you want to remove your saved settings and presets?", "Kloc Uninstaller", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+    if ($ans -eq [System.Windows.Forms.DialogResult]::Yes) { $keepData = $false }
+}
+
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "Kloc.ps1" -or $_.Name -match "Kloc.exe" } | Invoke-CimMethod -MethodName Terminate | Out-Null
-$installDir = "C:\Program Files\Detaroxz\Kloc"; $appDataDir = "$env:APPDATA\Detaroxz\Kloc"; $commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
-if (Test-Path $installDir) { Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue }
-if (Test-Path $appDataDir) { Remove-Item -Path $appDataDir -Recurse -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 1
+
+$installDir = "C:\Program Files\Detaroxz\Kloc"
+$commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
 
 $mainShortcutPath = Join-Path $commonPrograms "Kloc.lnk"
 if (Test-Path $mainShortcutPath) { Remove-Item $mainShortcutPath -Force -ErrorAction SilentlyContinue }
@@ -1321,7 +1347,15 @@ $shortcutPath = Join-Path ([Environment]::GetFolderPath('Startup')) "Kloc.lnk"
 if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force -ErrorAction SilentlyContinue }
 Unregister-ScheduledTask -TaskName "KlocDesktopClock" -Confirm:$false -ErrorAction SilentlyContinue
 Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Kloc" -Recurse -Force -ErrorAction SilentlyContinue
-Write-Host "Uninstallation Complete!" -ForegroundColor Green; Start-Sleep -Seconds 2
+
+if (-not $keepData) {
+    if (Test-Path $appDataDir) { Remove-Item -Path $appDataDir -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+[System.Windows.Forms.MessageBox]::Show("Uninstallation Complete!", "Kloc", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+
+Start-Process cmd.exe -ArgumentList "/c ping 127.0.0.1 -n 4 > nul & rmdir /s /q `"$installDir`"" -WindowStyle Hidden
+Exit
 '@
 Set-Content -Path "$installDir\Uninstall.ps1" -Value $uninstallContent -Encoding UTF8
 
