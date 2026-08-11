@@ -51,6 +51,9 @@ Once running, Kloc lives quietly in your System Tray (bottom right of your taskb
 
 Kloc natively supports adding itself to your startup routine via the Advanced tab (Startup Folder, Registry, or Scheduled Task).
 
+## 💻 Ram usage
+It will be anywhere from 5 to 120 mb depending on what settings you use
+
 ## 🛠️ Architecture & Under the Hood
 
 Kloc is an experiment in pushing the limits of what a raw PowerShell script can do without relying on heavy visual frameworks:
