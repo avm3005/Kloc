@@ -1377,12 +1377,12 @@ Exit
 '@
 Set-Content -Path "$installDir\Uninstall.ps1" -Value $uninstallContent -Encoding UTF8
 
-$WshShell = New-Object -ComObject WScript.Shell
-$mainShortcutPath = Join-Path$commonPrograms "Kloc.lnk"
-$shortcutStart =$WshShell.CreateShortcut($mainShortcutPath)$shortcutStart.TargetPath = "wscript.exe"
-$shortcutStart.Arguments = "`"C:\Program Files\Detaroxz\Kloc\Invisible.vbs`""
-$shortcutStart.IconLocation = "C:\Program Files\Detaroxz\Kloc\icon.ico"
-$shortcutStart.Save()
+$WshShell = New-Object -ComObject WScript.Shell;
+$mainShortcutPath = Join-Path$commonPrograms "Kloc.lnk";
+$shortcutStart =$WshShell.CreateShortcut($mainShortcutPath);$shortcutStart.TargetPath = "wscript.exe";
+$shortcutStart.Arguments = "`"C:\Program Files\Detaroxz\Kloc\Invisible.vbs`"";
+$shortcutStart.IconLocation = "C:\Program Files\Detaroxz\Kloc\icon.ico";
+$shortcutStart.Save();
 
 # --- 7. REGISTRY & LAUNCH ---
 $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Kloc"
