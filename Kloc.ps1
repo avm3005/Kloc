@@ -1,3 +1,183 @@
+# Install-Kloc.ps1 - Single-File Setup for Kloc Desktop Clock v1.0.0
+
+# --- 1. AUTOMATIC ADMINISTRATOR ELEVATION ---
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    Exit
+}
+
+Write-Host "=================================================" -ForegroundColor Cyan
+Write-Host "     Kloc Desktop Clock Installer - v1.0.0       " -ForegroundColor White
+Write-Host "=================================================" -ForegroundColor Cyan
+Start-Sleep -Seconds 1
+
+# --- 2. PREVIOUS INSTALLATION DETECTION & PRESET MIGRATION ---
+$appDataFolder = "$env:APPDATA\Detaroxz\Kloc"
+$settingsFile = "$appDataFolder\settings.json"
+$existingSettings =$null
+
+if (Test-Path $settingsFile) {
+    Write-Host "[*] Previous settings detected. Backing up to memory..." -ForegroundColor Yellow
+    $existingSettings = Get-Content$settingsFile -Raw
+}
+
+Write-Host "`nPlease select a visual preset for Kloc:" -ForegroundColor Cyan
+Write-Host "(Note: you can customize everything in settings later)`n" -ForegroundColor DarkGray
+
+if ($null -ne$existingSettings) { Write-Host "0. Keep my existing settings" -ForegroundColor Yellow }
+Write-Host "1. Only big day - black"
+Write-Host "2. Only big time - white"
+Write-Host "3. Balanced Default - small font, white, day, date, and time"
+
+$defChoice = if ($null -ne$existingSettings) { "0" } else { "1" }
+$opts = if ($null -ne$existingSettings) { "0/1/2/3" } else { "1/2/3" }
+$choice = Read-Host "`nEnter your choice ($opts) [Default: $defChoice]"
+if ([string]::IsNullOrWhiteSpace($choice)) { $choice = $defChoice }
+
+$preset1 = @{ FontQuote1="Segoe UI"; ClockColor="#000000"; DateAboveTime=$false; Quote1Italic=$true; Quote2Bold=$false; SizeTime=48; SizeQuote1=18; ShadowEnabled=$false; FontQuote2="Segoe UI"; DateItalic=$false; Quote1Bold=$false; ColorDay="#FFFFFF"; DayItalic=$true; Quote2Italic=$false; Quote1AllCaps=$false; AmPmItalic=$false; FontTime="Segoe UI"; SizeQuote2=14; LineSpacing=0; DateAllCaps=$false; DayAllCaps=$false; ShowDay=$true; LimitOffset=200; Alignment="Center"; SizeDay=266.4; ShowBackground=$false; DateBold=$false; ColorDate="#FFFFFF"; DateDaySameLine=$false; QuoteSpacing=10; StartupMethod="Disabled"; TimeItalic=$false; PositionMode="Centered"; TimeBold=$false; ColorQuote1="#FFFFFF"; ShowSeconds=$false; AmPmAllCaps=$false; Quote2AllCaps=$false; UseIndividualColors=$false; ColorAmPm="#FFFFFF"; ShowTime=$false; ShowQuote2=$false; TextOpacity=100; DayBold=$true; BgOpacity=50; AmPmSpacing=5; FontDate="Segoe UI"; SizeDate=20; FontAmPm="Segoe UI"; SizeAmPm=20; IncludeTaskbarInCenter=$false; ShowDate=$false; AmPmOffsetY=0; ColorTime="#FFFFFF"; AmPmBold=$false; FontDay="Brush Script MT"; ColorQuote2="#FFFFFF"; AlwaysOnTop=$false; TimeAllCaps=$false; ShowAmPm=$true; LockPosition=$false; LimitSpacing=50; UseAmPm=$false; BackgroundColor="#FFFFFF"; Quote2Text="Make it count."; Quote1Text="Stay Focused"; ShowQuote1=$false; DateDaySpacing=10 }
+$preset2 = @{ ShowDate=$false; FontQuote1="Segoe UI"; ShowAmPm=$false; DateAboveTime=$false; ShowDay=$false; Quote2Bold=$false; SizeTime=400; ShadowEnabled=$false; Quote1Italic=$true; Quote1Bold=$false; ColorDay="#FFFFFF"; DayItalic=$true; Quote2Italic=$false; Quote1AllCaps=$false; AmPmItalic=$false; FontTime="Impact"; SizeQuote2=14; DayAllCaps=$false; FontQuote2="Segoe UI"; AmPmBold=$false; ShowBackground=$false; Alignment="Center"; SizeDay=266.4; LimitOffset=300; DateBold=$false; BgOpacity=50; QuoteSpacing=10; TimeItalic=$false; TextOpacity=100; DateItalic=$false; TimeBold=$false; ColorQuote1="#FFFFFF"; ShowSeconds=$false; AmPmAllCaps=$true; LineSpacing=0; UseIndividualColors=$false; ShowTime=$true; FontDay="Brush Script MT"; ColorAmPm="#FFFFFF"; DateAllCaps=$false; DayBold=$true; Quote2AllCaps=$false; AmPmSpacing=-3; FontDate="Segoe UI"; SizeDate=20; PositionMode="Centered"; StartupMethod="Disabled"; TimeAllCaps=$false; IncludeTaskbarInCenter=$false; ClockColor="#FFFFFF"; AmPmOffsetY=249; ShowQuote2=$false; ColorTime="#FFFFFF"; Quote2Text="Make it count."; ColorDate="#FFFFFF"; FontAmPm="Impact"; ColorQuote2="#FFFFFF"; AlwaysOnTop=$false; SizeAmPm=96; SizeQuote1=18; LockPosition=$false; LimitSpacing=50; UseAmPm=$true; BackgroundColor="#FFFFFF"; DateDaySameLine=$false; Quote1Text="Stay Focused"; DateDaySpacing=10; ShowQuote1=$false }
+$preset3 = @{ ShowTime=$true; ShowDate=$true; ShowDay=$true; ClockColor="#FFFFFF"; FontTime="Segoe UI Light"; SizeTime=72; TimeBold=$false; TimeItalic=$false; ShowSeconds=$false; UseAmPm=$true; ShowAmPm=$true; FontAmPm="Segoe UI Light"; SizeAmPm=24; AmPmOffsetY=15; AmPmSpacing=8; AmPmAllCaps=$true; FontDate="Segoe UI Semilight"; SizeDate=22; DateAllCaps=$false; FontDay="Segoe UI Semibold"; SizeDay=24; DayAllCaps=$true; DateDaySameLine=$true; DateDaySpacing=15; LineSpacing=5; Alignment="Center"; PositionMode="Centered"; ShadowEnabled=$true; TextOpacity=90; ShowBackground=$false; Quote1Text="Stay Focused"; ShowQuote1=$false; FontQuote1="Segoe UI"; DateAboveTime=$false; Quote1Italic=$true; Quote2Bold=$false; SizeQuote1=18; FontQuote2="Segoe UI"; DateItalic=$false; Quote1Bold=$false; ColorDay="#FFFFFF"; DayItalic=$false; Quote2Italic=$false; Quote1AllCaps=$false; AmPmItalic=$false; SizeQuote2=14; LimitOffset=200; DateBold=$false; ColorDate="#FFFFFF"; QuoteSpacing=10; StartupMethod="Disabled"; ColorQuote1="#FFFFFF"; Quote2AllCaps=$false; UseIndividualColors=$false; ColorAmPm="#FFFFFF"; ShowQuote2=$false; DayBold=$false; BgOpacity=50; IncludeTaskbarInCenter=$false; ColorTime="#FFFFFF"; AmPmBold=$false; ColorQuote2="#FFFFFF"; AlwaysOnTop=$false; LockPosition=$false; LimitSpacing=50; BackgroundColor="#000000"; Quote2Text="Make it count." }
+
+Write-Host "[*] Terminating existing background processes..." -ForegroundColor DarkGray
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "Kloc.ps1" -or $_.Name -match "Kloc.exe" } | Invoke-CimMethod -MethodName Terminate | Out-Null
+
+$installDir = "C:\Program Files\Detaroxz\Kloc"
+$commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
+
+Write-Host "[*] Cleaning up old application data..." -ForegroundColor DarkGray
+if (Test-Path $installDir) { Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue }
+$oldMenuDir = Join-Path $commonPrograms "Kloc"
+if (Test-Path $oldMenuDir) { Remove-Item -Path $oldMenuDir -Recurse -Force -ErrorAction SilentlyContinue }
+$mainShortcutPath = Join-Path $commonPrograms "Kloc.lnk"
+if (Test-Path $mainShortcutPath) { Remove-Item $mainShortcutPath -Force -ErrorAction SilentlyContinue }
+
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Kloc" -ErrorAction SilentlyContinue
+$shortcutPath = Join-Path ([Environment]::GetFolderPath('Startup')) "Kloc.lnk"
+if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force -ErrorAction SilentlyContinue }
+Unregister-ScheduledTask -TaskName "KlocDesktopClock" -Confirm:$false -ErrorAction SilentlyContinue
+Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Kloc" -Recurse -Force -ErrorAction SilentlyContinue
+
+New-Item -Path $installDir -ItemType Directory -Force | Out-Null
+if (-not (Test-Path $appDataFolder)) { New-Item -Path $appDataFolder -ItemType Directory -Force | Out-Null }
+
+if ($choice -eq "0" -and $null -ne $existingSettings) {
+    Set-Content -Path $settingsFile -Value $existingSettings -Force
+    Write-Host "[*] Existing settings seamlessly restored!" -ForegroundColor Green
+} else {
+    $sel = $preset1
+    if ($choice -eq "2") { $sel = $preset2 } elseif ($choice -eq "3") { $sel = $preset3 }
+    $sel | ConvertTo-Json -Depth 2 | Set-Content $settingsFile -Force
+    Write-Host "[*] Preset applied successfully!" -ForegroundColor Green
+}
+
+# --- 3. DYNAMICALLY GENERATE DUAL UI ASSETS (NO CLIPPING) ---
+Write-Host "[*] Rendering custom SVG UI Assets (High Fidelity)..." -ForegroundColor Cyan
+try {
+    Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase, System.Drawing
+    $svgXaml = @"
+    <Viewbox xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Width="256" Height="256">
+        <Canvas Width="32" Height="32">
+            <Path Fill="#2197F3" Data="M28,8v13c0,0.55-0.45,1-1,1H5c-0.55,0-1-0.45-1-1V8c0-1.65,1.35-3,3-3h18C26.65,5,28,6.35,28,8z"/>
+            <Path Fill="#FFFFFF" Data="M11.5,15c-0.2559,0-0.5117-0.0977-0.707-0.293c-0.3906-0.3906-0.3906-1.0234,0-1.4141l3-3 c0.3906-0.3906,1.0234-0.3906,1.4141,0s0.3906,1.0234,0,1.4141l-3,3C12.0117,14.9023,11.7559,15,11.5,15z"/>
+            <Path Fill="#FFFFFF" Data="M15.5,16c-0.2559,0-0.5117-0.0977-0.707-0.293c-0.3906-0.3906-0.3906-1.0234,0-1.4141l5-5 c0.3906-0.3906,1.0234-0.3906,1.4141,0s0.3906,1.0234,0,1.4141l-5,5C16.0117,15.9023,15.7559,16,15.5,16z"/>
+            <Path Fill="#3F51B5" Data="M31,23.5c0,1.93-1.57,3.5-3.5,3.5h-23C2.57,27,1,25.43,1,23.5S2.57,20,4.5,20h23 C29.43,20,31,21.57,31,23.5z"/>
+        </Canvas>
+    </Viewbox>
+"@
+    $stringReader = New-Object System.IO.StringReader($svgXaml)
+    $xmlReader = [System.Xml.XmlReader]::Create($stringReader)
+    $viewbox = [System.Windows.Markup.XamlReader]::Load($xmlReader)
+    $xmlReader.Close()
+    $stringReader.Dispose()
+    
+    $viewbox.Measure([System.Windows.Size]::new(256, 256))
+    $viewbox.Arrange([System.Windows.Rect]::new(0, 0, 256, 256))
+    $viewbox.UpdateLayout()
+    [System.Windows.Media.RenderOptions]::SetBitmapScalingMode($viewbox, [System.Windows.Media.BitmapScalingMode]::HighQuality)
+
+    $rtb = New-Object System.Windows.Media.Imaging.RenderTargetBitmap(256, 256, 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
+    $rtb.Render($viewbox)
+    $pngEncoder = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+    $pngEncoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($rtb))
+    $ms = New-Object System.IO.MemoryStream
+    $pngEncoder.Save($ms)
+    $pngBytes = $ms.ToArray()
+    
+    $icoStream = New-Object System.IO.FileStream("$installDir\icon.ico", [System.IO.FileMode]::Create)
+    $bw = New-Object System.IO.BinaryWriter($icoStream)
+    $bw.Write([int16]0); $bw.Write([int16]1); $bw.Write([int16]1); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([int16]1); $bw.Write([int16]32)
+    $bw.Write([int32]$pngBytes.Length); $bw.Write([int32]22); $bw.Write($pngBytes)
+    $bw.Flush(); $icoStream.Dispose()
+    
+    $ms.Position = 0
+    $bmp256 = [System.Drawing.Bitmap]::FromStream($ms)
+    $bmp64 = New-Object System.Drawing.Bitmap(64, 64)
+    $g64 = [System.Drawing.Graphics]::FromImage($bmp64)
+    $g64.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $g64.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+    $g64.DrawImage($bmp256, 0, 0, 64, 64)
+    $g64.Dispose()
+    $bmp256.Dispose()
+    $ms.Dispose()
+
+    $ms64 = New-Object System.IO.MemoryStream
+    $bmp64.Save($ms64, [System.Drawing.Imaging.ImageFormat]::Png)
+    $pngBytes64 = $ms64.ToArray()
+    $ms64.Dispose()
+    $bmp64.Dispose()
+
+    $icoStream64 = New-Object System.IO.FileStream("$installDir\tray.ico", [System.IO.FileMode]::Create)
+    $bw64 = New-Object System.IO.BinaryWriter($icoStream64)
+    $bw64.Write([int16]0); $bw64.Write([int16]1); $bw64.Write([int16]1); $bw64.Write([byte]64); $bw64.Write([byte]64); $bw64.Write([byte]0); $bw64.Write([byte]0); $bw64.Write([int16]1); $bw64.Write([int16]32)
+    $bw64.Write([int32]$pngBytes64.Length); $bw64.Write([int32]22); $bw64.Write($pngBytes64)
+    $bw64.Flush(); $icoStream64.Dispose()
+
+} catch {
+    Write-Host "[!] Advanced SVG Rendering failed. Falling back to default app icon..." -ForegroundColor Yellow
+    Add-Type -AssemblyName System.Drawing
+    $bmp = New-Object System.Drawing.Bitmap(256, 256)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#2197F3"))), 12, 12, 232, 232)
+    $ms = New-Object System.IO.MemoryStream
+    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    $pngBytes = $ms.ToArray()
+    $icoStream = New-Object System.IO.FileStream("$installDir\icon.ico", [System.IO.FileMode]::Create)
+    $bw = New-Object System.IO.BinaryWriter($icoStream)
+    $bw.Write([int16]0); $bw.Write([int16]1); $bw.Write([int16]1); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([int16]1); $bw.Write([int16]32)
+    $bw.Write([int32]$pngBytes.Length); $bw.Write([int32]22); $bw.Write($pngBytes)
+    $bw.Flush(); $icoStream.Dispose(); $ms.Dispose(); $g.Dispose(); $bmp.Dispose()
+    
+    $bmp64 = New-Object System.Drawing.Bitmap(64, 64)
+    $g64 = [System.Drawing.Graphics]::FromImage($bmp64)
+    $g64.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g64.Clear([System.Drawing.Color]::Transparent)
+    $g64.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#2197F3"))), 3, 3, 58, 58)
+    $ms64 = New-Object System.IO.MemoryStream
+    $bmp64.Save($ms64, [System.Drawing.Imaging.ImageFormat]::Png)
+    $pngBytes64 = $ms64.ToArray()
+    $icoStream64 = New-Object System.IO.FileStream("$installDir\tray.ico", [System.IO.FileMode]::Create)
+    $bw64 = New-Object System.IO.BinaryWriter($icoStream64)
+    $bw64.Write([int16]0); $bw64.Write([int16]1); $bw64.Write([int16]1); $bw64.Write([byte]64); $bw64.Write([byte]64); $bw64.Write([byte]0); $bw64.Write([byte]0); $bw64.Write([int16]1); $bw64.Write([int16]32)
+    $bw64.Write([int32]$pngBytes64.Length); $bw64.Write([int32]22); $bw64.Write($pngBytes64)
+    $bw64.Flush(); $icoStream64.Dispose(); $ms64.Dispose(); $g64.Dispose(); $bmp64.Dispose()
+}
+
+# --- 4. BUILD THE TASK MANAGER EXECUTABLE & SILENT LAUNCHER ---
+Write-Host "[*] Creating Native Background Wrapper (Bypassing App Control)..." -ForegroundColor Cyan
+Copy-Item "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -Destination "$installDir\Kloc.exe" -Force
+
+$vbsPayload = @'
+Set ws = CreateObject("WScript.Shell")
+ws.Run """C:\Program Files\Detaroxz\Kloc\Kloc.exe"" -ExecutionPolicy Bypass -WindowStyle Hidden -File ""C:\Program Files\Detaroxz\Kloc\Kloc.ps1""", 0, False
+'@
+Set-Content -Path "$installDir\Invisible.vbs" -Value $vbsPayload -Encoding Ascii
+
+# --- 5. DEFINE THE MAIN CLOCK SCRIPT PAYLOAD ---
+Write-Host "[*] Writing Kloc Engine & Layout logic..." -ForegroundColor Cyan
+$klocContent = @'
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
@@ -139,7 +319,6 @@ function Load-Settings {
 function Save-Settings ($SettingsObj) { $SettingsObj | ConvertTo-Json -Depth 2 | Set-Content $settingsFile -Force }
 $global:Settings = Load-Settings
 
-# MinWidth and MinHeight completely prevent the 0x0 WPF auto-detach bug
 $clockXAML = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         Title="Kloc" Background="Transparent" AllowsTransparency="True" WindowStyle="None" 
@@ -188,6 +367,16 @@ function Get-FormattedCase ($str, $isCaps, $isAmPm = $false) {
     else { if ($isAmPm) { return $str.ToLower() }; return $str }
 }
 
+# Explicit color parser that avoids silent pipeline errors
+function Get-RobustBrushFromHex($hex) {
+    try {
+        $color = [System.Windows.Media.ColorConverter]::ConvertFromString($hex)
+        return New-Object System.Windows.Media.SolidColorBrush($color)
+    } catch {
+        return New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Colors]::White)
+    }
+}
+
 function Apply-Layout {
     $shadowOp = if ($global:Settings.ShadowEnabled) { 0.8 } else { 0.0 }
     if ($null -ne $TimeText.Effect) { $TimeText.Effect.Opacity = $shadowOp }
@@ -231,26 +420,24 @@ function Apply-Layout {
     $Quote1Text.Text = Get-FormattedCase ($global:Settings.Quote1Text.Replace("\n", "`n")) $global:Settings.Quote1AllCaps $false
 
     $Quote2Text.Visibility = if ($global:Settings.ShowQuote2) { 'Visible' } else { 'Collapsed' }
-    $Quote2Text.FontFamily = $global:Settings.FontQuote2; $Quote2Text.FontSize = $global:Settings.SizeQuote2
+    $Quote2Text.FontFamily =$global:Settings.FontQuote2; $Quote2Text.FontSize =$global:Settings.SizeQuote2
     $Quote2Text.FontWeight = if ($global:Settings.Quote2Bold) { 'Bold' } else { 'Normal' }
     $Quote2Text.FontStyle = if ($global:Settings.Quote2Italic) { 'Italic' } else { 'Normal' }
     $Quote2Text.Text = Get-FormattedCase ($global:Settings.Quote2Text.Replace("\n", "`n")) $global:Settings.Quote2AllCaps $false
     
-    try {
-        $conv = New-Object System.Windows.Media.BrushConverter
-        if ($global:Settings.UseIndividualColors) {
-            $TimeText.Foreground = $conv.ConvertFromString($global:Settings.ColorTime)
-            $AmPmText.Foreground = $conv.ConvertFromString($global:Settings.ColorAmPm)
-            $DateText.Foreground = $conv.ConvertFromString($global:Settings.ColorDate)
-            $DayText.Foreground = $conv.ConvertFromString($global:Settings.ColorDay)
-            $Quote1Text.Foreground = $conv.ConvertFromString($global:Settings.ColorQuote1)
-            $Quote2Text.Foreground = $conv.ConvertFromString($global:Settings.ColorQuote2)
-        } else {
-            $brush = $conv.ConvertFromString($global:Settings.ClockColor)
-            $TimeText.Foreground = $brush; $AmPmText.Foreground = $brush; $DateText.Foreground = $brush; $DayText.Foreground = $brush
-            $Quote1Text.Foreground = $brush; $Quote2Text.Foreground = $brush
-        }
-    } catch { }
+    # Robust Color Application Engine
+    if ($global:Settings.UseIndividualColors) {
+        $TimeText.Foreground = Get-RobustBrushFromHex $global:Settings.ColorTime
+        $AmPmText.Foreground = Get-RobustBrushFromHex $global:Settings.ColorAmPm
+        $DateText.Foreground = Get-RobustBrushFromHex $global:Settings.ColorDate
+        $DayText.Foreground = Get-RobustBrushFromHex $global:Settings.ColorDay
+        $Quote1Text.Foreground = Get-RobustBrushFromHex $global:Settings.ColorQuote1
+        $Quote2Text.Foreground = Get-RobustBrushFromHex $global:Settings.ColorQuote2
+    } else {
+        $brush = Get-RobustBrushFromHex $global:Settings.ClockColor
+        $TimeText.Foreground = $brush; $AmPmText.Foreground = $brush; $DateText.Foreground = $brush; $DayText.Foreground = $brush
+        $Quote1Text.Foreground = $brush; $Quote2Text.Foreground = $brush
+    }
 
     try {
         if ($global:Settings.ShowBackground) {
@@ -439,6 +626,22 @@ $script:UpdateState = {
     $global:Settings.DateDaySameLine = ($setWindow.FindName("chkSameLine").IsChecked -eq $true)
     $global:Settings.DateAboveTime = ($setWindow.FindName("chkDateAbove").IsChecked -eq $true)
     $global:Settings.StartupMethod = $setWindow.FindName("cmbStartup").Text
+    
+    # Save Colors securely from Labels
+    $global:Settings.ClockColor = $setWindow.FindName("lblClockColor").Text
+    $global:Settings.ColorTime = $setWindow.FindName("lblColorTime").Text
+    $global:Settings.ColorAmPm = $setWindow.FindName("lblColorAmPm").Text
+    $global:Settings.ColorDate = $setWindow.FindName("lblColorDate").Text
+    $global:Settings.ColorDay = $setWindow.FindName("lblColorDay").Text
+    $global:Settings.ColorQuote1 = $setWindow.FindName("lblColorQuote1").Text
+    $global:Settings.ColorQuote2 = $setWindow.FindName("lblColorQuote2").Text
+    $global:Settings.BackgroundColor = $setWindow.FindName("lblBgColor").Text
+
+    # Save Slider Values securely
+    $global:Settings.TextOpacity = $setWindow.FindName("sldTextOpacity").Value
+    $global:Settings.BgOpacity = $setWindow.FindName("sldBgOpacity").Value
+    $global:Settings.AmPmSpacing = $setWindow.FindName("sldAmPmSpacing").Value
+    $global:Settings.AmPmOffsetY = $setWindow.FindName("sldAmPmOffsetY").Value
 
     # Update Dynamic Visibilities
     $timeIsOn = $global:Settings.ShowTime
@@ -840,8 +1043,13 @@ function Show-SettingsWindow {
         $lbl.Text = "$($tag.Name), $([math]::Round($tag.Size))pt$b$i"; $lbl.Tag = $tag
     }
     
+    # Safe robust assignment to bypass parsing errors
     function Update-ColorLabel($lbl, $rect, $hex) {
-        $lbl.Text = $hex; $rect.Fill = (New-Object System.Windows.Media.BrushConverter).ConvertFromString($hex)
+        $lbl.Text = $hex
+        try {
+            $color = [System.Windows.Media.ColorConverter]::ConvertFromString($hex)
+            $rect.Fill = New-Object System.Windows.Media.SolidColorBrush($color)
+        } catch { }
     }
 
     $script:SyncUIToSettings = {
@@ -966,11 +1174,16 @@ function Show-SettingsWindow {
         return $res
     }
     
+    # Strictly isolates ColorDialog output leakages from breaking pipeline execution
     function Prompt-Color($hexStr) {
-        $dlg = New-Object System.Windows.Forms.ColorDialog; $dlg.FullOpen = $true
+        $dlg = New-Object System.Windows.Forms.ColorDialog
+        $dlg.FullOpen = $true
         try { $dlg.Color = [System.Drawing.ColorTranslator]::FromHtml($hexStr) } catch {}
         $res = $hexStr
-        if ($dlg.ShowDialog() -eq 'OK') { $res = "#$($dlg.Color.R.ToString('X2'))$($dlg.Color.G.ToString('X2'))$($dlg.Color.B.ToString('X2'))" }
+        $result = $dlg.ShowDialog()
+        if ($result -eq [System.Windows.Forms.DialogResult]::OK) { 
+            $res = "#$($dlg.Color.R.ToString('X2'))$($dlg.Color.G.ToString('X2'))$($dlg.Color.B.ToString('X2'))" 
+        }
         $dlg.Dispose()
         return $res
     }
@@ -1006,13 +1219,13 @@ function Show-SettingsWindow {
 
     # --- LIMIT MODIFIERS LOGIC ---
     $setWindow.FindName("btnLineSpacing").Add_Click({
-        $val = 0; if ([int]::TryParse($setWindow.FindName("txtLineSpacing").Text, [ref]$val)) { $global:Settings.LineSpacing = $val; &$script:UpdateState }
+        $val = 0; if ([int]::TryParse($setWindow.FindName("txtLineSpacing").Text, [ref]$val)) {$global:Settings.LineSpacing = $val; &$script:UpdateState }
     })
     $setWindow.FindName("btnDateDaySpacing").Add_Click({
-        $val = 10; if ([int]::TryParse($setWindow.FindName("txtDateDaySpacing").Text, [ref]$val)) { $global:Settings.DateDaySpacing = $val; &$script:UpdateState }
+        $val = 10; if ([int]::TryParse($setWindow.FindName("txtDateDaySpacing").Text, [ref]$val)) {$global:Settings.DateDaySpacing = $val; &$script:UpdateState }
     })
     $setWindow.FindName("btnQuoteSpacing").Add_Click({
-        $val = 10; if ([int]::TryParse($setWindow.FindName("txtQuoteSpacing").Text, [ref]$val)) { $global:Settings.QuoteSpacing = $val; &$script:UpdateState }
+        $val = 10; if ([int]::TryParse($setWindow.FindName("txtQuoteSpacing").Text, [ref]$val)) {$global:Settings.QuoteSpacing = $val; &$script:UpdateState }
     })
     $setWindow.FindName("btnLimitOffset").Add_Click({
         $val = 200; if ([int]::TryParse($setWindow.FindName("txtLimitOffset").Text, [ref]$val)) { 
@@ -1032,14 +1245,12 @@ function Show-SettingsWindow {
     })
 
     # --- TEXT BOXES ---
-    $setWindow.FindName("txtQuote1").Add_LostFocus({ $global:Settings.Quote1Text = $this.Text; Apply-Layout; [Win32]::TrimMemory() })
-    $setWindow.FindName("txtQuote2").Add_LostFocus({ $global:Settings.Quote2Text = $this.Text; Apply-Layout; [Win32]::TrimMemory() })
+    $setWindow.FindName("txtQuote1").Add_LostFocus({ $global:Settings.Quote1Text = $this.Text; Apply-Layout; [Win32]::TrimMemory() })$setWindow.FindName("txtQuote2").Add_LostFocus({ $global:Settings.Quote2Text =$this.Text; Apply-Layout; [Win32]::TrimMemory() })
 
     # --- CHECKBOXES ---
     $chkNames = @("chkTime", "chkCapsTime", "chkAmPmShow", "chkCapsAmPm", "chkDate", "chkCapsDate", "chkDay", "chkCapsDay", "chkShadow", "chkShowBg", "chkAmPm", "chkSeconds", "chkLock", "chkIncludeTaskbar", "chkSameLine", "chkDateAbove", "chkShowQuote1", "chkCapsQuote1", "chkShowQuote2", "chkCapsQuote2", "chkIndividualColors")
-    foreach ($cName in $chkNames) {
-        $cObj = $setWindow.FindName($cName)
-        if ($null -ne $cObj) {
+    foreach ($cName in $chkNames) {$cObj = $setWindow.FindName($cName)
+        if ($null -ne$cObj) {
             $cObj.Add_Checked({ &$script:UpdateState })
             $cObj.Add_Unchecked({ &$script:UpdateState })
         }
@@ -1052,10 +1263,8 @@ function Show-SettingsWindow {
     $setWindow.FindName("cmbStartup").Add_DropDownClosed({ &$script:UpdateState })
 
     # --- SLIDERS ---
-    $sldOp = $setWindow.FindName("sldTextOpacity"); $sldOp.Add_ValueChanged({ $setWindow.FindName("lblTextOpacity").Text = "$($this.Value)%"; &$script:UpdateState })
-    $sldBgOp = $setWindow.FindName("sldBgOpacity"); $sldBgOp.Add_ValueChanged({ $setWindow.FindName("lblBgOpacity").Text = "$($this.Value)%"; &$script:UpdateState })
-    $sldAmPmSpace = $setWindow.FindName("sldAmPmSpacing"); $sldAmPmSpace.Add_ValueChanged({ $setWindow.FindName("lblAmPmSpacing").Text = "$($this.Value)"; &$script:UpdateState })
-    $sldAmPmOffset = $setWindow.FindName("sldAmPmOffsetY"); $sldAmPmOffset.Add_ValueChanged({ $setWindow.FindName("lblAmPmOffsetY").Text = "$($this.Value)"; &$script:UpdateState })
+    $sldOp =$setWindow.FindName("sldTextOpacity"); $sldOp.Add_ValueChanged({$setWindow.FindName("lblTextOpacity").Text = "$($this.Value)%"; &$script:UpdateState })$sldBgOp = $setWindow.FindName("sldBgOpacity"); $sldBgOp.Add_ValueChanged({ $setWindow.FindName("lblBgOpacity").Text = "$($this.Value)\%"; &$script:UpdateState })
+    $sldAmPmSpace =$setWindow.FindName("sldAmPmSpacing"); $sldAmPmSpace.Add_ValueChanged({$setWindow.FindName("lblAmPmSpacing").Text = "$($this.Value)"; &$script:UpdateState })$sldAmPmOffset = $setWindow.FindName("sldAmPmOffsetY"); $sldAmPmOffset.Add_ValueChanged({ $setWindow.FindName("lblAmPmOffsetY").Text = "$($this.Value)"; &$script:UpdateState })
 
     # --- FONT BUTTONS ---
     $setWindow.FindName("btnFontTime").Add_Click({ Update-FontLabel $setWindow.FindName("lblFontTime") (Prompt-Font $setWindow.FindName("lblFontTime").Tag); &$script:UpdateState })
@@ -1066,14 +1275,10 @@ function Show-SettingsWindow {
     $setWindow.FindName("btnFontQuote2").Add_Click({ Update-FontLabel $setWindow.FindName("lblFontQuote2") (Prompt-Font $setWindow.FindName("lblFontQuote2").Tag); &$script:UpdateState })
     
     # --- COLOR BUTTONS ---
-    $setWindow.FindName("btnClockColor").Add_Click({ Update-ColorLabel $setWindow.FindName("lblClockColor") $setWindow.FindName("rectClockColor") (Prompt-Color $setWindow.FindName("lblClockColor").Text); &$script:UpdateState })
-    $setWindow.FindName("btnColorTime").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorTime") $setWindow.FindName("rectColorTime") (Prompt-Color $setWindow.FindName("lblColorTime").Text); &$script:UpdateState })
-    $setWindow.FindName("btnColorAmPm").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorAmPm") $setWindow.FindName("rectColorAmPm") (Prompt-Color $setWindow.FindName("lblColorAmPm").Text); &$script:UpdateState })
-    $setWindow.FindName("btnColorDate").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorDate") $setWindow.FindName("rectColorDate") (Prompt-Color $setWindow.FindName("lblColorDate").Text); &$script:UpdateState })
-    $setWindow.FindName("btnColorDay").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorDay") $setWindow.FindName("rectColorDay") (Prompt-Color $setWindow.FindName("lblColorDay").Text); &$script:UpdateState })
-    $setWindow.FindName("btnColorQuote1").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorQuote1") $setWindow.FindName("rectColorQuote1") (Prompt-Color $setWindow.FindName("lblColorQuote1").Text); &$script:UpdateState })
-    $setWindow.FindName("btnColorQuote2").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorQuote2") $setWindow.FindName("rectColorQuote2") (Prompt-Color $setWindow.FindName("lblColorQuote2").Text); &$script:UpdateState })
-    $setWindow.FindName("btnBgColor").Add_Click({ Update-ColorLabel $setWindow.FindName("lblBgColor") $setWindow.FindName("rectBgColor") (Prompt-Color $setWindow.FindName("lblBgColor").Text); &$script:UpdateState })
+    $setWindow.FindName("btnClockColor").Add_Click({ Update-ColorLabel $setWindow.FindName("lblClockColor") $setWindow.FindName("rectClockColor") (Prompt-Color $setWindow.FindName("lblClockColor").Text); &$script:UpdateState })$setWindow.FindName("btnColorTime").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorTime") $setWindow.FindName("rectColorTime") (Prompt-Color $setWindow.FindName("lblColorTime").Text); &$script:UpdateState })
+    $setWindow.FindName("btnColorAmPm").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorAmPm") $setWindow.FindName("rectColorAmPm") (Prompt-Color $setWindow.FindName("lblColorAmPm").Text); &$script:UpdateState })$setWindow.FindName("btnColorDate").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorDate") $setWindow.FindName("rectColorDate") (Prompt-Color $setWindow.FindName("lblColorDate").Text); &$script:UpdateState })
+    $setWindow.FindName("btnColorDay").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorDay") $setWindow.FindName("rectColorDay") (Prompt-Color $setWindow.FindName("lblColorDay").Text); &$script:UpdateState })$setWindow.FindName("btnColorQuote1").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorQuote1") $setWindow.FindName("rectColorQuote1") (Prompt-Color $setWindow.FindName("lblColorQuote1").Text); &$script:UpdateState })
+    $setWindow.FindName("btnColorQuote2").Add_Click({ Update-ColorLabel $setWindow.FindName("lblColorQuote2") $setWindow.FindName("rectColorQuote2") (Prompt-Color $setWindow.FindName("lblColorQuote2").Text); &$script:UpdateState })$setWindow.FindName("btnBgColor").Add_Click({ Update-ColorLabel $setWindow.FindName("lblBgColor") $setWindow.FindName("rectBgColor") (Prompt-Color $setWindow.FindName("lblBgColor").Text); &$script:UpdateState })
     
     # --- LINKS ---
     $setWindow.FindName("btnRepo").Add_Click({ Start-Process "https://github.com/avm3005/Kloc" })
@@ -1089,15 +1294,14 @@ $window.Add_Loaded({
     
     # Hide from Alt+Tab AND Prevent Activation Focus (fixes Win+D top-layer rendering bug)
     $exStyle = [Win32]::GetWindowLong($script:clockHwnd, -20)
-    [Win32]::SetWindowLong($script:clockHwnd, -20, $exStyle -bor 0x00000080 -bor 0x08000000) | Out-Null
+    [Win32]::SetWindowLong($script:clockHwnd, -20,$exStyle -bor 0x00000080 -bor 0x08000000) | Out-Null
     
     # Win32 Event Hook to strictly intercept Win+D (WM_SHOWWINDOW) and immediately force Z-order to bottom
     $script:hookDelegate = [System.Windows.Interop.HwndSourceHook]{
         param([IntPtr]$hwnd, [int]$msg, [IntPtr]$wParam, [IntPtr]$lParam, [ref]$handled)
-        if ($msg -eq 0x0018) {
-            $window.Dispatcher.BeginInvoke([Action]{
-                if ($null -ne $script:clockHwnd -and $script:clockHwnd -ne [IntPtr]::Zero) {
-                    [Win32]::EnforceDesktopPosition($script:clockHwnd, $global:Settings.AlwaysOnTop)
+        if ($msg -eq 0x0018) {$window.Dispatcher.BeginInvoke([Action]{
+                if ($null -ne $script:clockHwnd -and$script:clockHwnd -ne [IntPtr]::Zero) {
+                    [Win32]::EnforceDesktopPosition($script:clockHwnd,$global:Settings.AlwaysOnTop)
                 }
             }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
         }
@@ -1109,12 +1313,12 @@ $window.Add_Loaded({
     Apply-Layout
     
     if ($global:Settings.AlwaysOnTop) {
-        $window.Topmost = $true
-        $script:isBoundToDesktop = $false
+        $window.Topmost =$true
+        $script:isBoundToDesktop =$false
     } else {
-        $window.Topmost = $false
+        $window.Topmost =$false
         [Win32]::BindToDesktop($script:clockHwnd)
-        $script:isBoundToDesktop = $true
+        $script:isBoundToDesktop =$true
     }
     
     $window.Opacity = 1
@@ -1124,12 +1328,72 @@ $window.Add_Loaded({
 $sysTray = New-Object System.Windows.Forms.NotifyIcon
 $sysTray.Icon = New-Object System.Drawing.Icon("C:\Program Files\Detaroxz\Kloc\tray.ico")
 $sysTray.Text = "Kloc Desktop Clock"
-$sysTray.Visible = $true
-$contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
+$sysTray.Visible = $true$contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
 $itemSettings = $contextMenu.Items.Add("Settings"); $itemSettings.add_Click({ Show-SettingsWindow })
-$itemExit = $contextMenu.Items.Add("Exit"); $itemExit.add_Click({ $sysTray.Visible = $false; $sysTray.Dispose(); [System.Windows.Application]::Current.Shutdown() })
-$sysTray.ContextMenuStrip = $contextMenu
+$itemExit =$contextMenu.Items.Add("Exit"); $itemExit.add_Click({$sysTray.Visible = $false; $sysTray.Dispose(); [System.Windows.Application]::Current.Shutdown() })
+$sysTray.ContextMenuStrip =$contextMenu
 
-$timer.Start()
-$app = New-Object System.Windows.Application
+$timer.Start()$app = New-Object System.Windows.Application
 $app.Run($window) | Out-Null
+'@
+
+# --- 6. WRITE REMAINING FILES & START MENU ---
+Set-Content -Path "$installDir\Kloc.ps1" -Value $klocContent -Encoding UTF8
+
+$uninstallContent = @'
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs; Exit }
+
+Add-Type -AssemblyName System.Windows.Forms
+
+$appDataDir = "$env:APPDATA\Detaroxz\Kloc"
+$keepData =$true
+if (Test-Path $appDataDir) {$ans = [System.Windows.Forms.MessageBox]::Show("Do you want to remove your saved settings and presets?", "Kloc Uninstaller", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+    if ($ans -eq [System.Windows.Forms.DialogResult]::Yes) { $keepData =$false }
+}
+
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match "Kloc.ps1" -or $_.Name -match "Kloc.exe" } | Invoke-CimMethod -MethodName Terminate | Out-Null
+Start-Sleep -Seconds 1
+
+$installDir = "C:\Program Files\Detaroxz\Kloc"
+$commonPrograms = [Environment]::GetFolderPath('CommonPrograms')
+
+$mainShortcutPath = Join-Path$commonPrograms "Kloc.lnk"
+if (Test-Path $mainShortcutPath) { Remove-Item$mainShortcutPath -Force -ErrorAction SilentlyContinue }
+
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Kloc" -ErrorAction SilentlyContinue
+$shortcutPath = Join-Path ([Environment]::GetFolderPath('Startup')) "Kloc.lnk"
+if (Test-Path $shortcutPath) { Remove-Item$shortcutPath -Force -ErrorAction SilentlyContinue }
+Unregister-ScheduledTask -TaskName "KlocDesktopClock" -Confirm:$false -ErrorAction SilentlyContinue
+Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Kloc" -Recurse -Force -ErrorAction SilentlyContinue
+
+if (-not $keepData) {
+    if (Test-Path $appDataDir) { Remove-Item -Path$appDataDir -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+[System.Windows.Forms.MessageBox]::Show("Uninstallation Complete!", "Kloc", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+
+Start-Process cmd.exe -ArgumentList "/c ping 127.0.0.1 -n 4 > nul & rmdir /s /q `"$installDir`"" -WindowStyle Hidden
+Exit
+'@
+Set-Content -Path "$installDir\Uninstall.ps1" -Value $uninstallContent -Encoding UTF8
+
+$WshShell = New-Object -ComObject WScript.Shell
+$mainShortcutPath = Join-Path$commonPrograms "Kloc.lnk"
+$shortcutStart =$WshShell.CreateShortcut($mainShortcutPath)$shortcutStart.TargetPath = "wscript.exe"
+$shortcutStart.Arguments = "`"C:\Program Files\Detaroxz\Kloc\Invisible.vbs`""
+$shortcutStart.IconLocation = "C:\Program Files\Detaroxz\Kloc\icon.ico"
+$shortcutStart.Save()
+
+# --- 7. REGISTRY & LAUNCH ---
+$regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Kloc"
+if (-not (Test-Path $regPath)) { New-Item -Path$regPath -Force | Out-Null }
+Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "Kloc Desktop Clock"; Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "1.0.0"; Set-ItemProperty -Path $regPath -Name "Publisher" -Value "Detaroxz"
+Set-ItemProperty -Path $regPath -Name "DisplayIcon" -Value "C:\Program Files\Detaroxz\Kloc\icon.ico"
+Set-ItemProperty -Path $regPath -Name "UninstallString" -Value "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$installDir\Uninstall.ps1`""
+Set-ItemProperty -Path $regPath -Name "NoModify" -Value 1; Set-ItemProperty -Path $regPath -Name "NoRepair" -Value 1
+
+Write-Host "=================================================" -ForegroundColor Cyan
+Write-Host " Installation Complete! Launching Kloc v1.0.0... " -ForegroundColor Green
+Write-Host "=================================================" -ForegroundColor Cyan
+Start-Process -FilePath "wscript.exe" -ArgumentList "`"$installDir\Invisible.vbs`"" -WindowStyle Hidden
+Start-Sleep -Seconds 2
